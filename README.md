@@ -13,6 +13,10 @@ What hasn't been tested:
 AMD OneXPlayers
 GPD Win devices
 
+Pop OS 22.04 build dependencies
+
+sudo apt install libx11-dev libwayland-dev libxkbcommon-dev cmake meson libxdamage-dev libxrender-dev libxtst-dev libvulkan-dev libxcb-xinput-dev libxcb-composite0-dev libxcb-icccm4-dev libxcb-res0-dev libxcb-util-dev libxcomposite-dev libxxf86vm-dev libxres-dev libdrm-dev wayland-protocols libcap-dev libsdl2-dev libgbm-dev libpixman-1-dev libinput-dev libseat-dev seatd libsystemd-dev
+
 
 ## gamescope: the micro-compositor formerly known as steamcompmgr
 
