@@ -1,4 +1,5 @@
-##
+## Gamescope OneXPlayer and other handhelds
+Games
 Rotation was tested on a Intel OneXplayer using these parameters:
 gamescope -W 2160 -H 1600 -e -- steam -gamepadui -steamos3 -steampal -steamdeck
 
