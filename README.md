@@ -45,7 +45,10 @@ If running RadeonSI clients with older cards (GFX8 and below), currently have to
 git submodule update --init
 meson build/
 ninja -C build/
+
+run using: 
 build/gamescope -- <game>
+
 ```
 
 Install with:
@@ -53,6 +56,8 @@ Install with:
 ```
 meson install -C build/ --skip-subprojects
 ```
+Optional move to /usr/bin
+sudo cp /usr/local/bin/gamescope /usr/bin/
 
 ## Keyboard shortcuts
 
