@@ -22,6 +22,7 @@ extern "C" {
 #include <map>
 #include <mutex>
 #include <vector>
+#include "drm_orientation/drm_mode.h"
 
 struct plane {
 	uint32_t id;
