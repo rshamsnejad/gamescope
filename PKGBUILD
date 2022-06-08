@@ -1,135 +1,84 @@
-# Maintainer:  Tk-Glitch <ti3nou@gmail.com>
+#testing
+_pkgname=gamescope
+pkgname=${_pkgname}-git
+pkgver=3.11.27.r0.ga913f85
+pkgrel=3
+pkgdesc="Micro-compositor formerly known as steamcompmgr"
+arch=(x86_64)
+url="https://github.com/Plagman/gamescope"
+license=("custom:BSD-2-Clause")
+depends=(
+    # gamescope
+    "libxcomposite" "libxtst" "libxres" "sdl2" "pipewire" "libliftoff"
+    # wlroots
+    "libdrm" "libxkbcommon" "libinput" "pixman" "xorg-xwayland" "xcb-util-renderutil" "xcb-util-wm" "xcb-util-errors" "seatd"
+)
+makedepends=("git" "meson" "ninja" "patch" "vulkan-headers" "glslang" "wayland-protocols" "cmake")
+provides=($_pkgname "steamcompmgr")
+conflicts=($_pkgname "steamcompmgr")
+source=("$_pkgname::git+https://github.com/Plagman/gamescope.git"
+        "git+https://gitlab.freedesktop.org/wlroots/wlroots.git"
+        "git+https://github.com/nothings/stb.git")
+sha512sums=('SKIP'
+            'SKIP'
+            'SKIP')
 
-_pkgbase=gamescope-onexplayer
-pkgname=${_pkgbase}-git
-pkgver=3.11.31.beta6.r1.g3d9c9b6
-pkgrel=1
-_where="$PWD" # track basedir as different Arch based distros are moving srcdir around
-source "$_where"/customization.cfg
-
-# Load external configuration file if present. Available variable values will overwrite customization.cfg ones.
-if [ -e "$_EXT_CONFIG_PATH" ]; then
-  source "$_EXT_CONFIG_PATH" && msg2 "External configuration file $_EXT_CONFIG_PATH will be used to override customization.cfg values.\n"
-fi
-
-arch=('x86_64')
-url="https://github.com/ruinenka/gamescope-onexplayer"
-license=('BSD 2-Clause "Simplified" License')
-pkgdesc="gamescope: the micro-compositor formerly known as steamcompmgr"
-
-exit_cleanup() {
-  # Prevent subproject conflicts
-  rm -rf "$_where/src/$_pkgbase"
-  rm -rf "$_where"/*.mygamescopepatch
-
-  remove_deps
-
-  msg2 "Cleanup done"
-}
-
-makedepends=('git' 'meson' 'ninja' 'cmake' 'pixman' 'pkgconf' 'vulkan-headers' 'wayland-protocols>=1.17')
-depends=(wayland opengl-driver xorg-server-xwayland libdrm libinput libxkbcommon libxcomposite libcap libxcb libpng glslang libxrender libxtst libxres vulkan-icd-loader sdl2 xcb-util-wm seatd)
-conflicts=('gamescope')
-
-# custom commit to pass to git
-if [ -n "$_gamescope_commit" ]; then
-  _gamescope_commit="#commit=${_gamescope_commit}"
-fi
-
-source=("git+https://github.com/ruineka/gamescope-onexplayer.git${_gamescope_commit}")
-md5sums=('SKIP')
-sha512sums=('SKIP')
-options=('staticlibs')
-
-user_patcher() {
-	# To patch the user because all your base are belong to us
-	local _patches=("$_where"/*."${_userpatch_ext}revert")
-	if [ ${#_patches[@]} -ge 2 ] || [ -e "${_patches}" ]; then
-	  if [ "$_user_patches_no_confirm" != "true" ]; then
-	    msg2 "Found ${#_patches[@]} 'to revert' userpatches for ${_userpatch_target}:"
-	    printf '%s\n' "${_patches[@]}"
-	    read -rp "Do you want to install it/them? - Be careful with that ;)"$'\n> N/y : ' _CONDITION;
-	  fi
-	  if [ "$_CONDITION" == "y" ] || [ "$_user_patches_no_confirm" == "true" ]; then
-	    for _f in "${_patches[@]}"; do
-	      if [ -e "${_f}" ]; then
-	        msg2 "######################################################"
-	        msg2 ""
-	        msg2 "Reverting your own ${_userpatch_target} patch ${_f}"
-	        msg2 ""
-	        msg2 "######################################################"
-	        patch -Np1 -R < "${_f}"
-	        echo "Reverted your own patch ${_f}" >> "$_where"/last_build_config.log
-	      fi
-	    done
-	  fi
-	fi
-
-	_patches=("$_where"/*."${_userpatch_ext}patch")
-	if [ ${#_patches[@]} -ge 2 ] || [ -e "${_patches}" ]; then
-	  if [ "$_user_patches_no_confirm" != "true" ]; then
-	    msg2 "Found ${#_patches[@]} userpatches for ${_userpatch_target}:"
-	    printf '%s\n' "${_patches[@]}"
-	    read -rp "Do you want to install it/them? - Be careful with that ;)"$'\n> N/y : ' _CONDITION;
-	  fi
-	  if [ "$_CONDITION" == "y" ] || [ "$_user_patches_no_confirm" == "true" ]; then
-	    for _f in "${_patches[@]}"; do
-	      if [ -e "${_f}" ]; then
-	        msg2 "######################################################"
-	        msg2 ""
-	        msg2 "Applying your own ${_userpatch_target} patch ${_f}"
-	        msg2 ""
-	        msg2 "######################################################"
-	        patch -Np1 < "${_f}"
-	        echo "Applied your own patch ${_f}" >> "$_where"/last_build_config.log
-	      fi
-	    done
-	  fi
-	fi
-}
 
 pkgver() {
-    cd ${_pkgbase}
-    git describe --long --tags --always | sed 's/\([^-]*-g\)/r\1/;s/-/./g;s/^v//'
+    cd "$srcdir/$_pkgname"
+
+    git describe --long --tags | sed 's/\([^-]*-g\)/r\1/;s/-/./g'
 }
 
 prepare() {
-    if [  -d _build ]; then
-        rm -rf _build
-    fi
-    mkdir _build
+    cd "$srcdir/$_pkgname"
 
-    ( cd "${_pkgbase}" && git reset --hard HEAD && git clean -xdf )
+    for src in "${source[@]}"; do
+        src="${src%%::*}"
+        src="${src##*/}"
+        [[ $src = *.patch ]] || continue
+        echo "Applying patch $src..."
+        git apply "../$src"
+    done
 
-    # user patches
-    cd ${_pkgbase}
-    _userpatch_target="gamescope"
-    _userpatch_ext="mygamescope"
-    user_patcher
-    cd "$_where"
+    git submodule init
+    git config submodule.subprojects/wlroots.url "$srcdir/wlroots"
+    git config submodule.subprojects/libliftoff.active "false"
+    git submodule update
+
+    # HACK: manually clone stb into subprojects
+    rm -rf "subprojects/stb"
+    git clone "$srcdir/stb" "subprojects/stb"
+    cp "subprojects/packagefiles/stb/meson.build" "subprojects/stb/"
 }
 
 build() {
-    cd ${_pkgbase}
-    git submodule update --init --recursive
 
-    meson \
-      --buildtype release \
-      --prefix /usr \
-      ${srcdir}/_build
+    arch-meson "$srcdir/$_pkgname" build \
+        --force-fallback-for=wlroots,stb \
+        -Dpipewire=enabled
+    ninja -C build
+}
+
+check() {
+
+    ninja -C build test
 }
 
 package() {
-    DESTDIR="$pkgdir" ninja -C _build install
-     
-    provides=(gamescope=$pkgver)
-     
-    msg2 "Removing unnecessary wlroots files"
-    rm -rfv "${pkgdir}"/usr/include
-    rm -rfv "${pkgdir}"/usr/lib/libwlroots*
-    rm -fv  "${pkgdir}"/usr/lib/pkgconfig/wlroots.pc
 
-    install -Dt "${pkgdir}/usr/share/licenses/${pkgname}" -m644 "${srcdir}/${_pkgbase}/LICENSE"
+    DESTDIR="$pkgdir" ninja -C build install
+
+    # Delete library files that were linked statically
+    rm -rfv "$pkgdir/usr/include/wlr" "$pkgdir/usr/lib/libwlroots.a" "$pkgdir/usr/lib/libwlroots*" "$pkgdir/usr/lib/pkgconfig/wlroots.pc"
+
+    # Delete empty directories
+    find "$pkgdir" -type d -empty -print -delete
+
+    cd "$srcdir/$_pkgname"
+
+    install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 "README.md" "${pkgdir}/usr/share/doc/${_pkgname}/README.md"
 }
 
-trap exit_cleanup EXIT
+
