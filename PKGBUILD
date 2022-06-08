@@ -1,11 +1,11 @@
 #testing
-_pkgname=gamescope
+_pkgname=gamescope-onexplayer
 pkgname=${_pkgname}-git
 pkgver=3.11.27.r0.ga913f85
 pkgrel=3
 pkgdesc="Micro-compositor formerly known as steamcompmgr"
 arch=(x86_64)
-url="https://github.com/Plagman/gamescope"
+url="https://github.com/ruineka/gamescope-onexplayer"
 license=("custom:BSD-2-Clause")
 depends=(
     # gamescope
@@ -16,7 +16,7 @@ depends=(
 makedepends=("git" "meson" "ninja" "patch" "vulkan-headers" "glslang" "wayland-protocols" "cmake")
 provides=($_pkgname "steamcompmgr")
 conflicts=($_pkgname "steamcompmgr")
-source=("$_pkgname::git+https://github.com/Plagman/gamescope.git"
+source=("$_pkgname::git+https://github.com/ruineka/gamescope-onexplayer.git"
         "git+https://gitlab.freedesktop.org/wlroots/wlroots.git"
         "git+https://github.com/nothings/stb.git")
 sha512sums=('SKIP'
