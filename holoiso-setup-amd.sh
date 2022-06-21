@@ -8,6 +8,7 @@ ninja -C build/
 sudo cp ~/gamescope-onexplayer/build/gamescope /usr/bin
 
 git clone -b service-test https://github.com/shadowblip/handygccs
+cd gamescope-onexplayer
 cd handygccs
 sudo make
 reboot
