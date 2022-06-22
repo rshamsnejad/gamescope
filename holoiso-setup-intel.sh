@@ -5,10 +5,10 @@ git clone -b oxp-90-intel https://github.com/ruineka/gamescope-onexplayer
 cd gamescope-onexplayer
 meson build/
 ninja -C build/
-sudo cp ~/gamescope-onexplayer/gamescope-onexplayer/build/gamescope /usr/bin
+sudo meson install -C build/ --skip-subprojects
+sudo cp /usr/local/bin /usr/bin
 
-git clone -b service-test https://github.com/shadowblip/handygccs
-cd gamescope-onexplayer
-cd handygccs
-sudo make
+git clone https://github.com/ShadowBlip/HandyGCCS.git
+cd HandyGCCS
+sudo make install
 reboot
