@@ -2,7 +2,7 @@ Instructions:\
 Holoiso:\
 When you have holoiso booted with an upsidedown screen and keyboard keys etc not working go to "Switch to Desktop.\
 When you are on the desktop press "CTRL + ALT+ T" or open "Konsole" from the start menu to open the terminal.\
-Copy and paste the commands below that corresponds to your hardware.\
+Copy and paste the commands below that corresponds to your hardware.
 
 ChimeraOS:\
 When you are booted into the old Steam OS interface press "CTRL + ALT + 3" type the commands corresponding to your hardware below.\
