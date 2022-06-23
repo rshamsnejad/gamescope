@@ -20,21 +20,7 @@ ChimeraOS v33-Intel\
 
 
 
-
-
-
-
-
-
 ## Gamescope OneXPlayer and other handhelds
-
-Rotation was tested on a Intel OneXplayer using these parameters:
-gamescope -W 2160 -H 1600 -e -- steam -gamepadui -steamos3 -steampal -steamdeck
-
-Distro: ChimeraOS 33
-
-Known issues:
-Intel units will need to use the modified 3.9.5 gamescope listed under the gamescope-onexplayer-downgraded branch or gamescope-onexplayer-intel
 
 The touchscreen inputs are not flipped with the display so that will be a seperate thing to sort out.
 
