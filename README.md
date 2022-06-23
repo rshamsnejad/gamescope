@@ -1,17 +1,21 @@
 Holoiso-AMD Install\
 `git clone https://github.com/ruineka/gamescope-onexplayer`\
+`cd gamescope-onexplayer`\
 `sudo ./holoiso-setup-amd.sh`
 
 Holoiso-Intel Install\
 `git clone https://github.com/ruineka/gamescope-onexplayer`\
+`cd gamescope-onexplayer`\
 `sudo ./holoiso-setup-intel.sh`
 
 ChimeraOS v33-AMD\
 `git clone https://github.com/ruineka/gamescope-onexplayer`\
+`cd gamescope-onexplayer`\
 `sudo ./chimera33-setup-amd.sh`
 
 ChimeraOS v33-Intel\
 `git clone https://github.com/ruineka/gamescope-onexplayer`\
+`cd gamescope-onexplayer`\
 `sudo ./chimera33-setup-intel.sh`
 
 
