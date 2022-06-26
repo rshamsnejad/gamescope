@@ -8,6 +8,8 @@ ChimeraOS:\
 When you are booted into the old Steam OS interface press "CTRL + ALT + 3" type the commands corresponding to your hardware below.\
 Optionally you can use SSH to copy and paste the commands, whichever is easier for you.
 
+The default user and pass for ChimeraOS is "gamer" and "gamer". `USER:gamer PASS:gamer`
+
 Holoiso-AMD Install\
 `git clone https://github.com/ruineka/gamescope-onexplayer`\
 `cd gamescope-onexplayer`\
