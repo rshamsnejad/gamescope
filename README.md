@@ -21,11 +21,15 @@ Holoiso-Intel Install\
 `sudo ./holoiso-setup-intel.sh`
 
 ChimeraOS v33-AMD\
+`sudo frzr-unlock`\
+`sudo pacman -Sy git`\
 `git clone https://github.com/ruineka/gamescope-onexplayer`\
 `cd gamescope-onexplayer`\
 `sudo ./chimera33-setup-amd.sh`
 
 ChimeraOS v33-Intel\
+`sudo frzr-unlock`\
+`sudo pacman -Sy git`\
 `git clone https://github.com/ruineka/gamescope-onexplayer`\
 `cd gamescope-onexplayer`\
 `sudo ./chimera33-setup-intel.sh`
