@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sudo pacman -Sy ninja meson python3 dbus-python vulkan-headers
-git clone -b oxp-90-intel https://github.com/ruineka/gamescope-onexplayer
+git clone -b another-experiment-intel https://github.com/ruineka/gamescope-onexplayer
 cd gamescope-onexplayer
 meson build/
 ninja -C build/
