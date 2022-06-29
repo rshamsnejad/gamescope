@@ -6,7 +6,7 @@ cd gamescope-onexplayer
 meson build/
 ninja -C build/
 sudo meson install -C build/ --skip-subprojects
-sudo cp /usr/local/bin /usr/bin
+sudo cp /usr/local/bin/gamescope /usr/bin
 
 git clone https://github.com/ShadowBlip/HandyGCCS.git
 cd HandyGCCS
