@@ -6,6 +6,7 @@ cd ~/gamescope-onexplayer/oxp-90
 meson build/
 ninja -C build/
 sudo meson install -C build/ --skip-subprojects
+killall -9 gamescope 
 sudo cp ~/gamescope-onexplayer/oxp-90/build/gamescope /usr/bin
 sudo cp /usr/local/bin /usr/bin
 
