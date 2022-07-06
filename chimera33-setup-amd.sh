@@ -1,5 +1,6 @@
 #!/bin/bash
 #retreving prebuilt binary
+sudo pacman -S --noconfirm wget
 sudo wget -O ~/gamescope.zip https://github.com/ruineka/gamescope-onexplayer/files/9056679/gamescope.zip
 sudo unzip ~/gamescope.zip -d /usr/bin
 #Cleanup
