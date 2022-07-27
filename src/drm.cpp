@@ -485,6 +485,8 @@ static bool refresh_state( drm_t *drm )
 
 		conn->possible_crtcs = get_connector_possible_crtcs(drm, conn->connector);
 
+		conn->current.crtc_id = conn->initial_prop_values["CRTC_ID"];
+
 		drm_log.debugf("found new connector '%s'", conn->name);
 	}
 
@@ -1082,6 +1084,11 @@ int drm_commit(struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 			drm->crtcs[i].pending = drm->crtcs[i].current;
 		}
 
+		for (auto &kv : drm->connectors) {
+			struct connector *conn = &kv.second;
+			conn->pending = conn->current;
+		}
+
 		// Undo refcount if the commit didn't actually work
 		for ( uint32_t i = 0; i < drm->fbids_in_req.size(); i++ )
 		{
@@ -1109,6 +1116,11 @@ int drm_commit(struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 			if ( drm->pending.degamma_lut_id != drm->current.degamma_lut_id )
 				drmModeDestroyPropertyBlob(drm->fd, drm->current.degamma_lut_id);
 			drm->crtcs[i].current = drm->crtcs[i].pending;
+		}
+
+		for (auto &kv : drm->connectors) {
+			struct connector *conn = &kv.second;
+			conn->current = conn->pending;
 		}
 	}
 
@@ -1648,6 +1660,11 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 		for ( auto &kv : drm->connectors ) {
 			struct connector *conn = &kv.second;
+
+			if ( conn->current.crtc_id == 0 )
+				continue;
+
+			conn->pending.crtc_id = 0;
 			int ret = add_connector_property( drm->req, conn, "CRTC_ID", 0 );
 			if (ret < 0)
 				return ret;
@@ -1689,7 +1706,12 @@ int drm_prepare( struct drm_t *drm, const struct FrameInfo_t *frameInfo )
 
 		// Then enable the one we've picked
 
-		int ret = add_connector_property(drm->req, drm->connector, "CRTC_ID", drm->crtc->id);
+		int ret = 0;
+
+		// Always set our CRTC_ID for the modeset, especially
+		// as we zero-ed it above.
+		drm->connector->pending.crtc_id = drm->crtc->id;
+		ret = add_connector_property(drm->req, drm->connector, "CRTC_ID", drm->crtc->id);
 		if (ret < 0)
 			return ret;
 
@@ -1776,6 +1798,11 @@ void drm_rollback( struct drm_t *drm )
 	for ( size_t i = 0; i < drm->crtcs.size(); i++ )
 	{
 		drm->crtcs[i].pending = drm->crtcs[i].current;
+	}
+
+	for (auto &kv : drm->connectors) {
+		struct connector *conn = &kv.second;
+		conn->pending = conn->current;
 	}
 }
 
