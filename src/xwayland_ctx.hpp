@@ -147,5 +147,6 @@ struct xwayland_ctx_t
 		Atom gamescopeCompositeDebug;
 
 		Atom gamescopeDisplayForceInternal;
+		Atom gamescopeDisplayModeNudge;
 	} atoms;
 };

@@ -4089,7 +4089,15 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		if ( !BIsNested() )
 		{
 			g_DRM.force_internal = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayForceInternal, 0 );
-			g_DRM.out_of_date = true;
+			g_DRM.out_of_date = 1;
+		}
+	}
+	if ( ev->atom == ctx->atoms.gamescopeDisplayModeNudge )
+	{
+		if ( !BIsNested() )
+		{
+			g_DRM.out_of_date = 2;
+			XDeleteProperty( ctx->dpy, ctx->root, ctx->atoms.gamescopeDisplayModeNudge );
 		}
 	}
 }
@@ -4986,6 +4994,7 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 	ctx->atoms.gamescopeCompositeDebug = XInternAtom( ctx->dpy, "GAMESCOPE_COMPOSITE_DEBUG", false );
 
 	ctx->atoms.gamescopeDisplayForceInternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_FORCE_INTERNAL", false );
+	ctx->atoms.gamescopeDisplayModeNudge = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_MODE_NUDGE", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);

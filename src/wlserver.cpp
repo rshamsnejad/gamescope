@@ -482,8 +482,8 @@ static void create_gamescope_pipewire( void )
 static void handle_session_active( struct wl_listener *listener, void *data )
 {
 	if (wlserver.wlr.session->active) {
-		g_DRM.out_of_date = true;
-		g_DRM.needs_modeset = true;
+		g_DRM.out_of_date = 1;
+		g_DRM.needs_modeset = 1;
 	}
 	g_DRM.paused = !wlserver.wlr.session->active;
 	wl_log.infof( "Session %s", g_DRM.paused ? "paused" : "resumed" );
@@ -553,7 +553,7 @@ bool wlsession_init( void ) {
 
 static void kms_device_handle_change( struct wl_listener *listener, void *data )
 {
-	g_DRM.out_of_date = true;
+	g_DRM.out_of_date = 1;
 	wl_log.infof( "Got change event for KMS device" );
 
 	nudge_steamcompmgr();
