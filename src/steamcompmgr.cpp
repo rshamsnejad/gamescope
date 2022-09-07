@@ -4084,6 +4084,14 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		g_bIsCompositeDebug = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeCompositeDebug, 0 );
 		hasRepaint = true;
 	}
+	if ( ev->atom == ctx->atoms.gamescopeDisplayForceInternal )
+	{
+		if ( !BIsNested() )
+		{
+			g_DRM.force_internal = !!get_prop( ctx, ctx->root, ctx->atoms.gamescopeDisplayForceInternal, 0 );
+			g_DRM.out_of_date = true;
+		}
+	}
 }
 
 static int
@@ -4976,6 +4984,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 
 	ctx->atoms.gamescopeCompositeForce = XInternAtom( ctx->dpy, "GAMESCOPE_COMPOSITE_FORCE", false );
 	ctx->atoms.gamescopeCompositeDebug = XInternAtom( ctx->dpy, "GAMESCOPE_COMPOSITE_DEBUG", false );
+
+	ctx->atoms.gamescopeDisplayForceInternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_FORCE_INTERNAL", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);
