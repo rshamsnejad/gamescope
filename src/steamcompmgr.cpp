@@ -834,6 +834,7 @@ MouseCursor::MouseCursor(xwayland_ctx_t *ctx)
 {
 	m_lastX = g_nNestedWidth / 2;
 	m_lastY = g_nNestedHeight / 2;
+	updateCursorFeedback( true );
 }
 
 void MouseCursor::queryPositions(int &rootX, int &rootY, int &winX, int &winY)
@@ -907,6 +908,8 @@ void MouseCursor::checkSuspension()
 			nudge_steamcompmgr();
 		}
 	}
+
+	updateCursorFeedback();
 }
 
 void MouseCursor::warp(int x, int y)
@@ -1096,6 +1099,7 @@ void MouseCursor::move(int x, int y)
 		XWarpPointer(m_ctx->dpy, None, x11_win(m_ctx->focus.inputFocusWindow), 0, 0, 0, 0, m_lastX, m_lastY);
 	}
 	m_hideForMovement = false;
+	updateCursorFeedback();
 }
 
 void MouseCursor::updatePosition()
@@ -1169,8 +1173,10 @@ bool MouseCursor::getTexture()
 	}
 
 	m_dirty = false;
+	updateCursorFeedback();
 
 	if (m_imageEmpty) {
+
 		return false;
 	}
 
@@ -1191,7 +1197,7 @@ bool MouseCursor::getTexture()
 
 void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 {
-	if (m_hideForMovement || m_imageEmpty) {
+	if ( m_hideForMovement || m_imageEmpty ) {
 		return;
 	}
 
@@ -1266,6 +1272,25 @@ void MouseCursor::paint(win *window, win *fit, struct FrameInfo_t *frameInfo)
 
 	layer->linearFilter = false;
 	layer->blackBorder = false;
+}
+
+void MouseCursor::updateCursorFeedback( bool bForce )
+{
+	// Can't resolve this until cursor is un-dirtied.
+	if ( m_dirty && !bForce )
+		return;
+
+	bool bVisible = !isHidden();
+
+	if ( m_bCursorVisibleFeedback == bVisible && !bForce )
+		return;
+
+	uint32_t value = bVisible ? 1 : 0;
+
+	XChangeProperty(m_ctx->dpy, m_ctx->root, m_ctx->atoms.gamescopeCursorVisibleFeedback, XA_CARDINAL, 32, PropModeReplace,
+		(unsigned char *)&value, 1 );
+
+	m_bCursorVisibleFeedback = bVisible;
 }
 
 struct BaseLayerInfo_t
@@ -5023,6 +5048,8 @@ void init_xwayland_ctx(gamescope_xwayland_server_t *xwayland_server)
 
 	ctx->atoms.gamescopeDisplayIsExternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_IS_EXTERNAL", false );
 	ctx->atoms.gamescopeDisplayModeListExternal = XInternAtom( ctx->dpy, "GAMESCOPE_DISPLAY_MODE_LIST_EXTERNAL", false );
+
+	ctx->atoms.gamescopeCursorVisibleFeedback = XInternAtom( ctx->dpy, "GAMESCOPE_CURSOR_VISIBLE_FEEDBACK", false );
 
 	ctx->root_width = DisplayWidth(ctx->dpy, ctx->scr);
 	ctx->root_height = DisplayHeight(ctx->dpy, ctx->scr);
