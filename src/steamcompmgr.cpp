@@ -1168,6 +1168,8 @@ bool MouseCursor::getTexture()
 		}
 	}
 
+	m_dirty = false;
+
 	if (m_imageEmpty) {
 		return false;
 	}
@@ -1183,7 +1185,6 @@ bool MouseCursor::getTexture()
 	m_texture = vulkan_create_texture_from_bits(surfaceWidth, surfaceHeight, image->width, image->height, DRM_FORMAT_ARGB8888, texCreateFlags, cursorBuffer.data());
 	assert(m_texture);
 	XFree(image);
-	m_dirty = false;
 
 	return true;
 }
