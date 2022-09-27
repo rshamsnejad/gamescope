@@ -169,7 +169,6 @@ void wlserver_touchup( int touch_id, uint32_t time );
 void wlserver_send_frame_done( struct wlr_surface *surf, const struct timespec *when );
 
 struct wlserver_output_info {
-	const char *name;
 	const char *description;
 	int phys_width, phys_height; // millimeters
 };
