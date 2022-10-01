@@ -153,5 +153,7 @@ struct xwayland_ctx_t
 		Atom gamescopeDisplayModeListExternal;
 
 		Atom gamescopeCursorVisibleFeedback;
+
+		Atom gamescopeSteamMaxHeight;
 	} atoms;
 };
