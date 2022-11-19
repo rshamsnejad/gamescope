@@ -981,7 +981,7 @@ bool CVulkanDevice::createLayouts()
 	VkPushConstantRange pushConstantRange = {
 		.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 		.offset = 0,
-		.size = 128,
+		.size = 256,
 	};
 	
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {
@@ -1537,7 +1537,7 @@ void CVulkanCmdBuffer::clearState()
 template<class PushData, class... Args>
 void CVulkanCmdBuffer::pushConstants(Args&&... args)
 {
-//	static_assert(sizeof(PushData) <= 128, "Only 128 bytes push constants.");
+	static_assert(sizeof(PushData) <= 256, "Only 256 bytes push constants.");
 	PushData data(std::forward<Args>(args)...);
 	m_device->vk.CmdPushConstants(m_cmdBuffer, m_device->pipelineLayout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(data), &data);
 }
