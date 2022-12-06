@@ -462,7 +462,6 @@ static void run_pipewire(struct pipewire_state *state)
 		},
 	};
 
-	state->running = true;
 	while (state->running) {
 		int ret = poll(pollfds, EVENT_COUNT, -1);
 		if (ret < 0) {
@@ -555,6 +554,7 @@ bool init_pipewire(void)
 		return false;
 	}
 
+	state->running = true;
 	while (state->stream_node_id == SPA_ID_INVALID) {
 		int ret = pw_loop_iterate(state->loop, -1);
 		if (ret < 0) {
