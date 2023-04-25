@@ -43,6 +43,7 @@ struct drm_t g_DRM = {};
 uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
 uint32_t g_nDRMFormatHDR = DRM_FORMAT_INVALID;
 bool g_bRotated = false;
+bool g_bDisplayTypeInternal = false;
 bool g_bUseLayers = true;
 bool g_bDebugLayers = false;
 const char *g_sOutputName = nullptr;
@@ -55,6 +56,8 @@ bool g_bSupportsAsyncFlips = false;
 
 enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 enum g_panel_orientation g_drmModeOrientation = PANEL_ORIENTATION_AUTO;
+enum g_panel_external_orientation g_drmModeExternalOrientation = PANEL_EXTERNAL_ORIENTATION_AUTO;
+enum g_panel_type g_drmPanelType = PANEL_TYPE_AUTO;
 std::atomic<uint64_t> g_drmEffectiveOrientation(DRM_MODE_ROTATE_0);
 
 
@@ -1407,11 +1410,34 @@ void drm_unlock_fbid( struct drm_t *drm, uint32_t fbid )
 static void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn, const drmModeModeInfo *mode)
 {
 	drm_screen_type screenType = drm_get_screen_type(drm);
-	if ( screenType == DRM_SCREEN_TYPE_EXTERNAL )
+	if ( screenType == DRM_SCREEN_TYPE_EXTERNAL && g_bDisplayTypeInternal == true )
+	{
+			switch ( g_drmModeExternalOrientation )
+		{
+			case PANEL_EXTERNAL_ORIENTATION_0:
+				g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+				break;
+			case PANEL_EXTERNAL_ORIENTATION_90:
+				g_drmEffectiveOrientation = DRM_MODE_ROTATE_90;
+				break;
+			case PANEL_EXTERNAL_ORIENTATION_180:
+				g_drmEffectiveOrientation = DRM_MODE_ROTATE_180;
+				break;
+			case PANEL_EXTERNAL_ORIENTATION_270:
+				g_drmEffectiveOrientation = DRM_MODE_ROTATE_270;
+				break;
+			case PANEL_EXTERNAL_ORIENTATION_AUTO:
+				g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
+				break;
+		}
+		return;
+	}
+	else if ( screenType == DRM_SCREEN_TYPE_EXTERNAL )
 	{
 		g_drmEffectiveOrientation = DRM_MODE_ROTATE_0;
 		return;
 	}
+
 	switch ( g_drmModeOrientation )
 	{
 		case PANEL_ORIENTATION_0:
@@ -2370,11 +2396,27 @@ bool drm_set_degamma_exponent(struct drm_t *drm, float *vec, enum drm_screen_typ
 
 drm_screen_type drm_get_connector_type(drmModeConnector *connector)
 {
-	if (connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
-		connector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
-		connector->connector_type == DRM_MODE_CONNECTOR_DSI)
-		return DRM_SCREEN_TYPE_INTERNAL;
-
+	// Set to the default state of false to make sure the external display isn't rotated when a system is docked
+	g_bDisplayTypeInternal = false;
+	switch ( g_drmPanelType )
+	{
+		case PANEL_TYPE_INTERNAL:
+			return DRM_SCREEN_TYPE_INTERNAL;
+			break;
+		case PANEL_TYPE_EXTERNAL:
+			if (connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+					connector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+					connector->connector_type == DRM_MODE_CONNECTOR_DSI)
+					g_bDisplayTypeInternal = true;
+			return DRM_SCREEN_TYPE_EXTERNAL;
+			break;
+		case PANEL_TYPE_AUTO:
+			if (connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+					connector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+					connector->connector_type == DRM_MODE_CONNECTOR_DSI)
+					return DRM_SCREEN_TYPE_INTERNAL;
+			break;
+	}
 	return DRM_SCREEN_TYPE_EXTERNAL;
 }
 
