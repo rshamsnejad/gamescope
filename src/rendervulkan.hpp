@@ -371,7 +371,8 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_wlr_buffer( struct wl
 
 bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture, bool partial, bool deferred );
 std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( bool partial, bool defer );
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace = k_EStreamColorspace_Unknown);
+std::shared_ptr<CVulkanTexture> vulkan_create_screenshot_texture(uint32_t width, uint32_t height, uint32_t drmFormat, bool exportable = false);
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, uint32_t drmFormat);
 
 void vulkan_present_to_window( void );
 #if HAVE_OPENVR
@@ -488,7 +489,7 @@ struct VulkanOutput_t
 	VkFormat outputFormat = VK_FORMAT_UNDEFINED;
 	VkFormat outputFormatOverlay = VK_FORMAT_UNDEFINED;
 
-	std::array<std::shared_ptr<CVulkanTexture>, 9> pScreenshotImages;
+	std::shared_ptr<CVulkanTexture> pScreenshotImage;
 
 	// NIS and FSR
 	std::shared_ptr<CVulkanTexture> tmpOutput;
