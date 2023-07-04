@@ -936,6 +936,9 @@ static bool refresh_state( drm_t *drm )
 		if (!crtc->has_valve1_regamma_tf)
 			drm_log.infof("CRTC %" PRIu32 " has no VALVE1_CRTC_REGAMMA_TF support", crtc->id);
 
+		crtc->lut3d_size = crtc->props.contains( "VALVE1_LUT3D_SIZE" ) ? uint32_t(crtc->initial_prop_values["VALVE1_LUT3D_SIZE"]) : 0;
+		crtc->shaperlut_size = crtc->props.contains( "VALVE1_SHAPER_LUT_SIZE" ) ? uint32_t(crtc->initial_prop_values["VALVE1_SHAPER_LUT_SIZE"]) : 0;
+
 		crtc->current.active = crtc->initial_prop_values["ACTIVE"];
 		if (crtc->has_vrr_enabled)
 			drm->current.vrr_enabled = crtc->initial_prop_values["VRR_ENABLED"];
@@ -948,7 +951,6 @@ static bool refresh_state( drm_t *drm )
 		if (!get_object_properties(drm, plane->id, DRM_MODE_OBJECT_PLANE, plane->props, plane->initial_prop_values)) {
 			return false;
 		}
-		plane->has_color_mgmt = plane->props.contains( "VALVE1_PLANE_BLEND_TF" );
 	}
 
 	return true;
@@ -1448,6 +1450,10 @@ void finish_drm(struct drm_t *drm)
 			add_crtc_property(req, &drm->crtcs[i], "DEGAMMA_LUT", 0);
 		if ( drm->crtcs[i].has_ctm )
 			add_crtc_property(req, &drm->crtcs[i], "CTM", 0);
+		if ( drm->crtcs[i].lut3d_size )
+			add_crtc_property(req, &drm->crtcs[i], "VALVE1_LUT3D", 0);
+		if ( drm->crtcs[i].shaperlut_size )
+			add_crtc_property(req, &drm->crtcs[i], "VALVE1_SHAPER_LUT", 0);
 		if ( drm->crtcs[i].has_vrr_enabled )
 			add_crtc_property(req, &drm->crtcs[i], "VRR_ENABLED", 0);
 		if ( drm->crtcs[i].has_valve1_regamma_tf )
@@ -2494,6 +2500,18 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				if (ret < 0)
 					return ret;
 			}
+			if (crtc->lut3d_size)
+			{
+				int ret = add_crtc_property(drm->req, crtc, "VALVE1_LUT3D", 0);
+				if (ret < 0)
+					return ret;
+			}
+			if (crtc->shaperlut_size)
+			{
+				int ret = add_crtc_property(drm->req, crtc, "VALVE1_SHAPER_LUT", 0);
+				if (ret < 0)
+					return ret;
+			}
 			if (crtc->has_vrr_enabled)
 			{
 				int ret = add_crtc_property(drm->req, crtc, "VRR_ENABLED", 0);
@@ -2762,7 +2780,7 @@ drm_screen_type drm_get_screen_type(struct drm_t *drm)
 
 bool drm_update_color_mgmt(struct drm_t *drm)
 {
-	if ( !drm_supports_color_mgmt( drm ) )
+	if ( !drm->crtc || !drm->connector || !drm->crtc->shaperlut_size || !drm->crtc->lut3d_size )
 		return true;
 
 	if ( g_ColorMgmt.serial == drm->current.color_mgmt_serial )
@@ -3020,10 +3038,10 @@ bool drm_supports_color_mgmt(struct drm_t *drm)
 	if (g_bForceDisableColorMgmt)
 		return false;
 
-	if (!drm->primary)
+	if (!drm->crtc)
 		return false;
 
-	return drm->primary->has_color_mgmt;
+	return drm->crtc->has_valve1_regamma_tf;
 }
 
 void drm_get_native_colorimetry( struct drm_t *drm,
