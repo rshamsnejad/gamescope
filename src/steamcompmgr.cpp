@@ -930,6 +930,7 @@ retry:
 	}
 
 	nudge_steamcompmgr();
+	handygccs_update( frametime, frametime, uint64_t(~0ull) );
 
 	if ( entry.mangoapp_nudge )
 		mangoapp_update( frametime, frametime, uint64_t(~0ull) );	
