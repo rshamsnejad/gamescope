@@ -251,6 +251,8 @@ bool g_bHeadless = false;
 
 bool g_bGrabbed = false;
 
+bool g_bExternalForced = false;
+
 GamescopeUpscaleFilter g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
 GamescopeUpscaleScaler g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
 
@@ -404,12 +406,16 @@ static enum GamescopeUpscaleFilter parse_upscaler_filter(const char *str)
 static enum g_panel_external_orientation force_external_orientation(const char *str)
 {
 	if (strcmp(str, "normal") == 0) {
+		g_bExternalForced = true;
 		return PANEL_EXTERNAL_ORIENTATION_0;
 	} else if (strcmp(str, "right") == 0) {
+		g_bExternalForced = true;
 		return PANEL_EXTERNAL_ORIENTATION_270;
 	} else if (strcmp(str, "left") == 0) {
+		g_bExternalForced = true;
 		return PANEL_EXTERNAL_ORIENTATION_90;
 	} else if (strcmp(str, "upsidedown") == 0) {
+		g_bExternalForced = true;
 		return PANEL_EXTERNAL_ORIENTATION_180;
 	} else {
 		fprintf( stderr, "gamescope: invalid value for --force-external-orientation\n" );
