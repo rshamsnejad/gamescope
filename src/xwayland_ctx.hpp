@@ -140,6 +140,7 @@ struct xwayland_ctx_t
 		Atom gamescopeFSRSharpness;
 		Atom gamescopeSharpness;
 
+		Atom gamescopeRotateControl;
 		Atom gamescopeXWaylandModeControl;
 
 		Atom gamescopeFPSLimit;
