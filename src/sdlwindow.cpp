@@ -4,6 +4,7 @@
 #include <thread>
 #include <mutex>
 #include <string>
+#include <optional>
 
 #include <linux/input-event-codes.h>
 #include <signal.h>
@@ -265,7 +266,7 @@ void inputSDLThreadRun( void )
 							SDL_SetWindowFullscreen( g_SDLWindow, g_bFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
 							break;
 						case KEY_N:
-							g_wantedUpscaleFilter = GamescopeUpscaleFilter::NEAREST;
+							g_wantedUpscaleFilter = GamescopeUpscaleFilter::PIXEL;
 							break;
 						case KEY_B:
 							g_wantedUpscaleFilter = GamescopeUpscaleFilter::LINEAR;
@@ -463,7 +464,7 @@ void inputSDLThreadRun( void )
 	}
 }
 
-pthread_t sdlwindow_thread = {};
+std::optional<pthread_t> sdlwindow_thread;
 
 bool sdlwindow_init( void )
 {
@@ -481,7 +482,11 @@ bool sdlwindow_init( void )
 
 void sdlwindow_shutdown( void )
 {
-	pthread_cancel(sdlwindow_thread);
+	if ( sdlwindow_thread )
+	{
+		pthread_cancel(*sdlwindow_thread);
+		sdlwindow_thread = std::nullopt;
+	}
 }
 
 void sdlwindow_title( std::shared_ptr<std::string> title, std::shared_ptr<std::vector<uint32_t>> icon )

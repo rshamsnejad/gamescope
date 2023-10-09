@@ -10,6 +10,8 @@
 #include <array>
 #include <bitset>
 
+#include "main.hpp"
+
 #include "shaders/descriptor_set_constants.h"
 
 class CVulkanCmdBuffer;
@@ -242,6 +244,16 @@ struct vec2_t
 	float x, y;
 };
 
+static inline bool float_is_integer(float x)
+{
+	return fabsf(ceilf(x) - x) <= 0.001f;
+}
+
+inline bool close_enough(float a, float b, float epsilon = 0.001f)
+{
+	return fabsf(a - b) <= epsilon;
+}
+
 struct FrameInfo_t
 {
 	bool useFSRLayer0;
@@ -266,8 +278,9 @@ struct FrameInfo_t
 
 		float opacity;
 
+		GamescopeUpscaleFilter filter = GamescopeUpscaleFilter::LINEAR;
+
 		bool blackBorder;
-		bool linearFilter;
 		bool applyColorMgmt; // drm only
 		bool allowBlending;  // drm only
 
@@ -279,6 +292,18 @@ struct FrameInfo_t
 				return false;
 
 			return tex->isYcbcr();
+		}
+
+		bool isScreenSize() const {
+			return close_enough(scale.x, 1.0f) &&
+			       close_enough(scale.y, 1.0f) &&
+				float_is_integer(offset.x) &&
+				float_is_integer(offset.y);
+		}
+
+		bool viewConvertsToLinearAutomatically() const {
+			return colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_LINEAR ||
+				colorspace == GAMESCOPE_APP_TEXTURE_COLORSPACE_SCRGB;
 		}
 
 		uint32_t integerWidth() const { return tex->width() / scale.x; }
@@ -343,7 +368,8 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_wlr_buffer( struct wl
 
 bool vulkan_composite( struct FrameInfo_t *frameInfo, std::shared_ptr<CVulkanTexture> pScreenshotTexture, bool partial, bool deferred );
 std::shared_ptr<CVulkanTexture> vulkan_get_last_output_image( bool partial, bool defer );
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace = k_EStreamColorspace_Unknown);
+std::shared_ptr<CVulkanTexture> vulkan_create_screenshot_texture(uint32_t width, uint32_t height, uint32_t drmFormat, bool exportable = false);
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, uint32_t drmFormat);
 
 void vulkan_present_to_window( void );
 #if HAVE_OPENVR
@@ -459,7 +485,7 @@ struct VulkanOutput_t
 	VkFormat outputFormat = VK_FORMAT_UNDEFINED;
 	VkFormat outputFormatOverlay = VK_FORMAT_UNDEFINED;
 
-	std::array<std::shared_ptr<CVulkanTexture>, 8> pScreenshotImages;
+	std::shared_ptr<CVulkanTexture> pScreenshotImage;
 
 	// NIS and FSR
 	std::shared_ptr<CVulkanTexture> tmpOutput;

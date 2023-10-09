@@ -65,7 +65,7 @@ extern "C" {
 
 static LogScope wl_log("wlserver");
 
-static struct wlserver_t wlserver = {
+struct wlserver_t wlserver = {
 	.touch_down_ids = {}
 };
 
@@ -866,13 +866,24 @@ static void create_gamescope_pipewire( void )
 
 //
 
+static void gamescope_control_set_app_target_refresh_cycle( struct wl_client *client, struct wl_resource *resource, uint32_t fps, uint32_t flags )
+{
+	auto display_type = DRM_SCREEN_TYPE_EXTERNAL;
+	if ( flags & GAMESCOPE_CONTROL_TARGET_REFRESH_CYCLE_FLAG_INTERNAL_DISPLAY )
+		display_type = DRM_SCREEN_TYPE_INTERNAL;
+
+	steamcompmgr_set_app_refresh_cycle_override( display_type, fps );
+}
+
 static void gamescope_control_handle_destroy( struct wl_client *client, struct wl_resource *resource )
 {
+	std::erase_if(wlserver.gamescope_controls, [=](auto control) { return control == resource; });
 	wl_resource_destroy( resource );
 }
 
 static const struct gamescope_control_interface gamescope_control_impl = {
 	.destroy = gamescope_control_handle_destroy,
+	.set_app_target_refresh_cycle = gamescope_control_set_app_target_refresh_cycle,
 };
 
 static void gamescope_control_bind( struct wl_client *client, void *data, uint32_t version, uint32_t id )
@@ -882,12 +893,16 @@ static void gamescope_control_bind( struct wl_client *client, void *data, uint32
 
 	// Send feature support
 	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_RESHADE_SHADERS, 1, 0 );
+	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_DISPLAY_INFO, 1, 0 );
+	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_PIXEL_FILTER, 1, 0 );
 	gamescope_control_send_feature_support( resource, GAMESCOPE_CONTROL_FEATURE_DONE, 0, 0 );
+
+	wlserver.gamescope_controls.push_back(resource);
 }
 
 static void create_gamescope_control( void )
 {
-	uint32_t version = 1;
+	uint32_t version = 2;
 	wl_global_create( wlserver.display, &gamescope_control_interface, version, NULL, gamescope_control_bind );
 }
 
@@ -1130,7 +1145,7 @@ static bool filter_global(const struct wl_client *client, const struct wl_global
 	 * the server. */
 	for (size_t i = 0; i < wlserver.wlr.xwayland_servers.size(); i++) {
 		gamescope_xwayland_server_t *server = wlserver.wlr.xwayland_servers[i].get();
-		if (server->get_client() == client)
+		if (server && server->get_client() == client)
 			return server->get_output() == output;
 	}
 
@@ -1140,7 +1155,7 @@ static bool filter_global(const struct wl_client *client, const struct wl_global
 	gamescope_xwayland_server_t *server = wlserver.wlr.xwayland_servers[0].get();
 	/* If we aren't an xwayland server, then only expose the first wl_output
 	 * that's associated with from server 0. */
-	return server->get_output() == output;
+	return server && server->get_output() == output;
 }
 
 bool wlsession_init( void ) {
@@ -1222,6 +1237,7 @@ gamescope_xwayland_server_t::gamescope_xwayland_server_t(wl_display *display)
 		.lazy = false,
 		.enable_wm = false,
 		.no_touch_pointer_emulation = true,
+		.force_xrandr_emulation = true,
 	};
 	xwayland_server = wlr_xwayland_server_create(display, &xwayland_options);
 	wl_signal_add(&xwayland_server->events.ready, &xwayland_ready_listener);
@@ -1785,6 +1801,31 @@ static void apply_touchscreen_orientation(double *x, double *y )
 			ty = 1.0 - *x;
 			break;
 	}
+	// Rotate screen if it's forced with --force-external-orientation
+
+	if ( g_bExternalForced == true)
+	{
+		switch ( g_drmEffectiveOrientation[DRM_SCREEN_TYPE_EXTERNAL] )
+		{
+			default:
+			case DRM_MODE_ROTATE_0:
+				tx = *x;
+				ty = *y;
+				break;
+			case DRM_MODE_ROTATE_90:
+				tx = 1.0 - *y;
+				ty = *x;
+				break;
+			case DRM_MODE_ROTATE_180:
+				tx = 1.0 - *x;
+				ty = 1.0 - *y;
+				break;
+			case DRM_MODE_ROTATE_270:
+				tx = *y;
+				ty = 1.0 - *x;
+				break;
+		}
+	}
 
 	*x = tx;
 	*y = ty;
@@ -2031,21 +2072,29 @@ void gamescope_xwayland_server_t::set_wl_id( struct wlserver_x11_surface_info *s
 {
 	if (surf->wl_id)
 	{
-		struct wl_resource *old_resource = wl_client_get_object( xwayland_server->client, surf->wl_id );
-		if (!old_resource)
+		if (surf->main_surface)
 		{
-			wl_log.errorf("wlserver_x11_surface_info had bad wl_id? Oh no! %d", surf->wl_id);
-			return;
-		}
-		wlr_surface *old_wlr_surf = wlr_surface_from_resource( old_resource );
-		if (!old_wlr_surf)
-		{
-			wl_log.errorf("wlserver_x11_surface_info wl_id's was not a wlr_surf?! Oh no! %d", surf->wl_id);
-			return;
-		}
+			struct wl_resource *old_resource = wl_client_get_object( xwayland_server->client, surf->wl_id );
+			if (!old_resource)
+			{
+				wl_log.errorf("wlserver_x11_surface_info had bad wl_id? Oh no! %d", surf->wl_id);
+				return;
+			}
+			wlr_surface *old_wlr_surf = wlr_surface_from_resource( old_resource );
+			if (!old_wlr_surf)
+			{
+				wl_log.errorf("wlserver_x11_surface_info wl_id's was not a wlr_surf?! Oh no! %d", surf->wl_id);
+				return;
+			}
 
-		wlserver_wl_surface_info *old_surface_info = get_wl_surface_info(old_wlr_surf);
-		old_surface_info->x11_surface = nullptr;
+			wlserver_wl_surface_info *old_surface_info = get_wl_surface_info(old_wlr_surf);
+			old_surface_info->x11_surface = nullptr;
+		}
+		else
+		{
+			wl_list_remove( &surf->pending_link );
+			wl_list_init( &surf->pending_link );
+		}
 	}
 
 	surf->wl_id = id;

@@ -8,6 +8,8 @@
 #include <drm_fourcc.h>
 #include <drm_mode.h>
 
+#include <span>
+
 #include "color_helpers.h"
 
 // Josh: Okay whatever, this header isn't
@@ -106,7 +108,6 @@ struct plane {
 	drmModePlane *plane;
 	std::map<std::string, const drmModePropertyRes *> props;
 	std::map<std::string, uint64_t> initial_prop_values;
-	bool has_color_mgmt;
 };
 
 struct crtc {
@@ -119,6 +120,8 @@ struct crtc {
 	bool has_ctm;
 	bool has_vrr_enabled;
 	bool has_valve1_regamma_tf;
+	uint32_t lut3d_size;
+	uint32_t shaperlut_size;
 
 	struct {
 		bool active;
@@ -146,6 +149,7 @@ struct connector {
 	char *make;
 	char *model;
 	bool is_steam_deck_display;
+	std::span<uint32_t> valid_display_rates{};
 
 	int target_refresh;
 	bool vrr_capable;
@@ -296,12 +300,29 @@ enum g_rotate_ctl{
 	LEFT_UP,
 	UPSIDEDOWN,
 	RIGHT_UP,
+
+enum g_panel_external_orientation {
+	PANEL_EXTERNAL_ORIENTATION_0,	/* NORMAL */
+	PANEL_EXTERNAL_ORIENTATION_270,	/* RIGHT */
+	PANEL_EXTERNAL_ORIENTATION_90,	/* LEFT */
+	PANEL_EXTERNAL_ORIENTATION_180,	/* UPSIDE DOWN */
+	PANEL_EXTERNAL_ORIENTATION_AUTO,
+};
+
+enum g_panel_type {
+	PANEL_TYPE_INTERNAL,
+	PANEL_TYPE_EXTERNAL,
+	PANEL_TYPE_AUTO,
 };
 
 extern enum drm_mode_generation g_drmModeGeneration;
 extern enum g_panel_orientation g_drmModeOrientation;
+extern enum g_panel_external_orientation g_drmModeExternalOrientation;
+extern enum g_panel_type g_drmPanelType;
+
 extern enum g_rotate_ctl g_drmRotateCTL;
 extern bool g_rotate_ctl_enable;
+
 
 extern std::atomic<uint64_t> g_drmEffectiveOrientation[DRM_SCREEN_TYPE_COUNT]; // DRM_MODE_ROTATE_*
 
@@ -346,6 +367,8 @@ void drm_set_hdr_state(struct drm_t *drm, bool enabled);
 void drm_get_native_colorimetry( struct drm_t *drm,
 	displaycolorimetry_t *displayColorimetry, EOTF *displayEOTF,
 	displaycolorimetry_t *outputEncodingColorimetry, EOTF *outputEncodingEOTF );
+
+std::span<uint32_t> drm_get_valid_refresh_rates( struct drm_t *drm );
 
 extern bool g_bSupportsAsyncFlips;
 

@@ -23,12 +23,17 @@ extern bool g_bFullscreen;
 
 extern bool g_bGrabbed;
 
+extern bool g_bExternalForced;
+
 enum class GamescopeUpscaleFilter : uint32_t
 {
     LINEAR = 0,
     NEAREST,
     FSR,
-    NIS
+    NIS,
+    PIXEL,
+
+    FROM_VIEW = 255, // internal
 };
 
 enum class GamescopeUpscaleScaler : uint32_t
@@ -51,6 +56,8 @@ extern bool g_bBorderlessOutputWindow;
 extern bool g_bNiceCap;
 extern int g_nOldNice;
 extern int g_nNewNice;
+
+extern bool g_bExposeWayland;
 
 extern bool g_bRt;
 extern int g_nOldPolicy;

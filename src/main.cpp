@@ -118,6 +118,8 @@ const struct option *gamescope_options = (struct option[]){
 	{ "disable-xres", no_argument, nullptr, 'x' },
 	{ "fade-out-duration", required_argument, nullptr, 0 },
 	{ "force-orientation", required_argument, nullptr, 0 },
+	{ "force-external-orientation", required_argument, nullptr, 0 },
+	{ "force-panel-type", required_argument, nullptr, 0 },
 	{ "force-windows-fullscreen", no_argument, nullptr, 0 },
 
 	{ "disable-color-management", no_argument, nullptr, 0 },
@@ -149,7 +151,7 @@ const char usage[] =
 	"  -r, --nested-refresh           game refresh rate (frames per second)\n"
 	"  -m, --max-scale                maximum scale factor\n"
 	"  -S, --scaler                   upscaler type (auto, integer, fit, fill, stretch)\n"
-	"  -F, --filter                   upscaler filter (linear, nearest, fsr, nis)\n"
+	"  -F, --filter                   upscaler filter (linear, nearest, fsr, nis, pixel)\n"
 	"                                     fsr => AMD FidelityFX™ Super Resolution 1.0\n"
 	"                                     nis => NVIDIA Image Scaling v1.0.3\n"
 	"  --sharpness, --fsr-sharpness   upscaler sharpness from 0 (max) to 20 (min)\n"
@@ -164,6 +166,8 @@ const char usage[] =
 	"  --xwayland-count               create N xwayland servers\n"
 	"  --prefer-vk-device             prefer Vulkan device for compositing (ex: 1002:7300)\n"
 	"  --force-orientation            rotate the internal display (left, right, normal, upsidedown)\n"
+	"  --force-external-orientation   rotate the external display (left, right, normal, upsidedown)\n"
+	"  --force-panel-type             force gamescope to treat the display as either internal or external\n"
 	"  --force-windows-fullscreen     force windows inside of gamescope to be the size of the nested display (fullscreen)\n"
 	"  --cursor-scale-height          if specified, sets a base output height to linearly scale the cursor against.\n"
 	"  --hdr-enabled                  enable HDR output (needs Gamescope WSI layer enabled for support from clients)\n"
@@ -259,6 +263,8 @@ bool g_bHeadless = false;
 
 bool g_bGrabbed = false;
 
+bool g_bExternalForced = false;
+
 GamescopeUpscaleFilter g_upscaleFilter = GamescopeUpscaleFilter::LINEAR;
 GamescopeUpscaleScaler g_upscaleScaler = GamescopeUpscaleScaler::AUTO;
 
@@ -347,6 +353,18 @@ static enum drm_mode_generation parse_drm_mode_generation(const char *str)
 	}
 }
 
+static enum g_panel_type force_panel_type(const char *str)
+{
+	if (strcmp(str, "internal") == 0) {
+		return PANEL_TYPE_INTERNAL;
+	} else if (strcmp(str, "external") == 0) {
+		return PANEL_TYPE_EXTERNAL;
+	} else {
+		fprintf( stderr, "gamescope: invalid value for --force-panel-type\n" );
+		exit(1);
+	}
+}
+
 static enum g_panel_orientation force_orientation(const char *str)
 {
 	if (strcmp(str, "normal") == 0) {
@@ -391,6 +409,8 @@ static enum GamescopeUpscaleFilter parse_upscaler_filter(const char *str)
 		return GamescopeUpscaleFilter::FSR;
 	} else if (strcmp(str, "nis") == 0) {
 		return GamescopeUpscaleFilter::NIS;
+	} else if (strcmp(str, "pixel") == 0) {
+		return GamescopeUpscaleFilter::PIXEL;
 	} else {
 		fprintf( stderr, "gamescope: invalid value for --filter\n" );
 		exit(1);
@@ -399,6 +419,26 @@ static enum GamescopeUpscaleFilter parse_upscaler_filter(const char *str)
 
 struct sigaction handle_signal_action = {};
 extern pid_t child_pid;
+
+static enum g_panel_external_orientation force_external_orientation(const char *str)
+{
+	if (strcmp(str, "normal") == 0) {
+		g_bExternalForced = true;
+		return PANEL_EXTERNAL_ORIENTATION_0;
+	} else if (strcmp(str, "right") == 0) {
+		g_bExternalForced = true;
+		return PANEL_EXTERNAL_ORIENTATION_270;
+	} else if (strcmp(str, "left") == 0) {
+		g_bExternalForced = true;
+		return PANEL_EXTERNAL_ORIENTATION_90;
+	} else if (strcmp(str, "upsidedown") == 0) {
+		g_bExternalForced = true;
+		return PANEL_EXTERNAL_ORIENTATION_180;
+	} else {
+		fprintf( stderr, "gamescope: invalid value for --force-external-orientation\n" );
+		exit(1);
+	}
+}
 
 static void handle_signal( int sig )
 {
@@ -526,13 +566,12 @@ static bool CheckWaylandPresentationTime()
 
 int g_nPreferredOutputWidth = 0;
 int g_nPreferredOutputHeight = 0;
+bool g_bExposeWayland = false;
 
 int main(int argc, char **argv)
 {
 	// Force disable this horrible broken layer.
 	setenv("DISABLE_LAYER_AMD_SWITCHABLE_GRAPHICS_1", "1", 1);
-
-	bool bExposeWayland = false;
 
 	static std::string optstring = build_optstring(gamescope_options);
 	gamescope_optstring = optstring.c_str();
@@ -607,6 +646,10 @@ int main(int argc, char **argv)
 					g_drmModeGeneration = parse_drm_mode_generation( optarg );
 				} else if (strcmp(opt_name, "force-orientation") == 0) {
 					g_drmModeOrientation = force_orientation( optarg );
+				} else if (strcmp(opt_name, "force-external-orientation") == 0) {
+					g_drmModeExternalOrientation = force_external_orientation( optarg );
+				} else if (strcmp(opt_name, "force-panel-type") == 0) {
+					g_drmPanelType = force_panel_type( optarg );
 				} else if (strcmp(opt_name, "sharpness") == 0 ||
 						   strcmp(opt_name, "fsr-sharpness") == 0) {
 					g_upscaleFilterSharpness = atoi( optarg );
@@ -625,7 +668,7 @@ int main(int argc, char **argv)
 				} else if (strcmp(opt_name, "adaptive-sync") == 0) {
 					s_bInitialWantsVRREnabled = true;
 				} else if (strcmp(opt_name, "expose-wayland") == 0) {
-					bExposeWayland = true;
+					g_bExposeWayland = true;
 				} else if (strcmp(opt_name, "headless") == 0) {
 					g_bHeadless = true;
 					g_bIsNested = true;
@@ -707,18 +750,20 @@ int main(int argc, char **argv)
 
 	if ( BIsSDLSession() && g_pOriginalWaylandDisplay != NULL )
 	{
-        // Default to SDL_VIDEODRIVER wayland under Wayland and force enable vk_khr_present_wait
-        // (not enabled by default in Mesa because instance does not know if Wayland
-        //  compositor supports wp_presentation, but we can check that ourselves.)
-        setenv("vk_khr_present_wait", "true", 0);
-        setenv("SDL_VIDEODRIVER", "wayland", 0);
-
-        if (!CheckWaylandPresentationTime())
+        if (CheckWaylandPresentationTime())
+        {
+            // Default to SDL_VIDEODRIVER wayland under Wayland and force enable vk_khr_present_wait
+            // (not enabled by default in Mesa because instance does not know if Wayland
+            //  compositor supports wp_presentation, but we can check that ourselves.)
+            setenv("vk_khr_present_wait", "true", 0);
+            setenv("SDL_VIDEODRIVER", "wayland", 0);
+        }
+        else
         {
             fprintf(stderr,
-                "Your Wayland compositor does NOT support wp_presentation/presentation-time which is required for VK_KHR_present_wait and VK_KHR_present_id which is needed for Gamescope to function.\n"
-                "Please update your compositor or complain to your compositor vendor for support.\n");
-            return 1;
+                "Your Wayland compositor does NOT support wp_presentation/presentation-time which is required for VK_KHR_present_wait and VK_KHR_present_id.\n"
+                "Please complain to your compositor vendor for support. Falling back to X11 window with less accurate present wait.\n");
+            setenv("SDL_VIDEODRIVER", "x11", 1);
         }
 	}
 
@@ -841,7 +886,7 @@ int main(int argc, char **argv)
 	gamescope_xwayland_server_t *base_server = wlserver_get_xwayland_server(0);
 
 	setenv("DISPLAY", base_server->get_nested_display_name(), 1);
-	if ( bExposeWayland )
+	if ( g_bExposeWayland )
 		setenv("XDG_SESSION_TYPE", "wayland", 1);
 	else
 		setenv("XDG_SESSION_TYPE", "x11", 1);
@@ -861,7 +906,7 @@ int main(int argc, char **argv)
 		setenv("STEAM_GAME_DISPLAY_0", base_server->get_nested_display_name(), 1);
 	}
 	setenv("GAMESCOPE_WAYLAND_DISPLAY", wlserver_get_wl_display_name(), 1);
-	if ( bExposeWayland )
+	if ( g_bExposeWayland )
 		setenv("WAYLAND_DISPLAY", wlserver_get_wl_display_name(), 1);
 
 #if HAVE_PIPEWIRE

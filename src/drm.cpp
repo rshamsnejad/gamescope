@@ -38,12 +38,15 @@ extern "C" {
 #include "libdisplay-info/cta.h"
 }
 
+#include "gamescope-control-protocol.h"
+
 struct drm_t g_DRM = {};
 
 uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
 uint32_t g_nDRMFormatOverlay = DRM_FORMAT_INVALID; // for partial composition, we may have more limited formats than base planes + alpha.
 bool g_bRotated = false;
 bool g_rotate_ctl_enable = false;
+bool g_bDisplayTypeInternal = false;
 bool g_bUseLayers = true;
 bool g_bDebugLayers = false;
 const char *g_sOutputName = nullptr;
@@ -58,6 +61,8 @@ enum drm_mode_generation g_drmModeGeneration = DRM_MODE_GENERATE_CVT;
 enum g_panel_orientation g_drmModeOrientation = PANEL_ORIENTATION_AUTO;
 enum g_rotate_ctl g_drmRotateCTL;
 std::atomic<uint64_t> g_drmEffectiveOrientation[DRM_SCREEN_TYPE_COUNT]{ {DRM_MODE_ROTATE_0}, {DRM_MODE_ROTATE_0} };
+enum g_panel_external_orientation g_drmModeExternalOrientation = PANEL_EXTERNAL_ORIENTATION_AUTO;
+enum g_panel_type g_drmPanelType = PANEL_TYPE_AUTO;
 
 bool g_bForceDisableColorMgmt = false;
 
@@ -69,6 +74,55 @@ static std::map< std::string, std::string > pnps = {};
 drm_screen_type drm_get_connector_type(drmModeConnector *connector);
 static void drm_unset_mode( struct drm_t *drm );
 static void drm_unset_connector( struct drm_t *drm );
+
+static uint32_t steam_deck_display_rates[] =
+{
+	40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+	50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+	60,
+};
+
+static uint32_t get_conn_display_info_flags(struct drm_t *drm, struct connector *connector)
+{
+	if (!connector)
+		return 0;
+
+	uint32_t flags = 0;
+	if ( drm_get_connector_type(connector->connector) == DRM_SCREEN_TYPE_INTERNAL )
+		flags |= GAMESCOPE_CONTROL_DISPLAY_FLAG_INTERNAL_DISPLAY;
+	if ( connector->vrr_capable )
+		flags |= GAMESCOPE_CONTROL_DISPLAY_FLAG_SUPPORTS_VRR;
+	if ( connector->metadata.supportsST2084 )
+		flags |= GAMESCOPE_CONTROL_DISPLAY_FLAG_SUPPORTS_HDR;
+
+	return flags;
+}
+
+static void update_connector_display_info_wl(struct drm_t *drm)
+{
+	if ( !drm->connector )
+		return;
+
+	auto& conn = drm->connector;
+
+	wlserver_lock();
+	for ( const auto &control : wlserver.gamescope_controls )
+	{
+		uint32_t flags = get_conn_display_info_flags( drm, drm->connector );
+
+		struct wl_array display_rates;
+		wl_array_init(&display_rates);
+		if ( conn->valid_display_rates.size() )
+		{
+			size_t size = conn->valid_display_rates.size() * sizeof(uint32_t);
+			uint32_t *ptr = (uint32_t *)wl_array_add( &display_rates, size );
+			memcpy( ptr, conn->valid_display_rates.data(), size );
+		}
+		gamescope_control_send_active_display_info( control, drm->connector->name, drm->connector->make, drm->connector->model, flags, &display_rates );
+		wl_array_release(&display_rates);
+	}
+	wlserver_unlock();
+}
 
 inline uint64_t drm_calc_s31_32(float val)
 {
@@ -826,6 +880,9 @@ static void parse_edid( drm_t *drm, struct connector *conn)
 		(strcmp(conn->make_pnp, "VLV") == 0 && strcmp(conn->model, "ANX7530 U") == 0) ||
 		(strcmp(conn->make_pnp, "VLV") == 0 && strcmp(conn->model, "Jupiter") == 0);
 
+	if ( conn->is_steam_deck_display )
+		conn->valid_display_rates = std::span(steam_deck_display_rates);
+
 	drm_hdr_parse_edid(drm, conn, edid);
 
 	di_info_destroy(info);
@@ -962,6 +1019,9 @@ static bool refresh_state( drm_t *drm )
 		if (!crtc->has_valve1_regamma_tf)
 			drm_log.infof("CRTC %" PRIu32 " has no VALVE1_CRTC_REGAMMA_TF support", crtc->id);
 
+		crtc->lut3d_size = crtc->props.contains( "VALVE1_LUT3D_SIZE" ) ? uint32_t(crtc->initial_prop_values["VALVE1_LUT3D_SIZE"]) : 0;
+		crtc->shaperlut_size = crtc->props.contains( "VALVE1_SHAPER_LUT_SIZE" ) ? uint32_t(crtc->initial_prop_values["VALVE1_SHAPER_LUT_SIZE"]) : 0;
+
 		crtc->current.active = crtc->initial_prop_values["ACTIVE"];
 		if (crtc->has_vrr_enabled)
 			drm->current.vrr_enabled = crtc->initial_prop_values["VRR_ENABLED"];
@@ -974,7 +1034,6 @@ static bool refresh_state( drm_t *drm )
 		if (!get_object_properties(drm, plane->id, DRM_MODE_OBJECT_PLANE, plane->props, plane->initial_prop_values)) {
 			return false;
 		}
-		plane->has_color_mgmt = plane->props.contains( "VALVE1_PLANE_BLEND_TF" );
 	}
 
 	return true;
@@ -1168,7 +1227,9 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 		const struct wlserver_output_info wlserver_output_info = {
 			.description = "Virtual screen",
 		};
+		wlserver_lock();
 		wlserver_set_output_info(&wlserver_output_info);
+		wlserver_unlock();
 		return true;
 	}
 
@@ -1219,10 +1280,14 @@ static bool setup_best_connector(struct drm_t *drm, bool force, bool initial)
 		.phys_width = (int) best->connector->mmWidth,
 		.phys_height = (int) best->connector->mmHeight,
 	};
+	wlserver_lock();
 	wlserver_set_output_info(&wlserver_output_info);
+	wlserver_unlock();
 
 	if (!initial)
 		create_patched_edid(best->edid_data.data(), best->edid_data.size(), drm, best);
+
+	update_connector_display_info_wl( drm );
 
 	return true;
 }
@@ -1487,6 +1552,10 @@ void finish_drm(struct drm_t *drm)
 			add_crtc_property(req, &drm->crtcs[i], "DEGAMMA_LUT", 0);
 		if ( drm->crtcs[i].has_ctm )
 			add_crtc_property(req, &drm->crtcs[i], "CTM", 0);
+		if ( drm->crtcs[i].lut3d_size )
+			add_crtc_property(req, &drm->crtcs[i], "VALVE1_LUT3D", 0);
+		if ( drm->crtcs[i].shaperlut_size )
+			add_crtc_property(req, &drm->crtcs[i], "VALVE1_SHAPER_LUT", 0);
 		if ( drm->crtcs[i].has_vrr_enabled )
 			add_crtc_property(req, &drm->crtcs[i], "VRR_ENABLED", 0);
 		if ( drm->crtcs[i].has_valve1_regamma_tf )
@@ -1869,8 +1938,29 @@ static uint64_t determine_drm_orientation(struct drm_t *drm, struct connector *c
 static void update_drm_effective_orientation(struct drm_t *drm, struct connector *conn, const drmModeModeInfo *mode)
 {
 	drm_screen_type screenType = drm_get_connector_type(conn->connector);
-
-	if (screenType == DRM_SCREEN_TYPE_INTERNAL)
+	if ( screenType == DRM_SCREEN_TYPE_EXTERNAL && g_bDisplayTypeInternal == true )
+	{
+		switch ( g_drmModeExternalOrientation )
+		{
+			case PANEL_EXTERNAL_ORIENTATION_0:
+				g_drmEffectiveOrientation[screenType]  = DRM_MODE_ROTATE_0;
+				break;
+			case PANEL_EXTERNAL_ORIENTATION_90:
+				g_drmEffectiveOrientation[screenType]  = DRM_MODE_ROTATE_90;
+				break;
+			case PANEL_EXTERNAL_ORIENTATION_180:
+				g_drmEffectiveOrientation[screenType]  = DRM_MODE_ROTATE_180;
+				break;
+			case PANEL_EXTERNAL_ORIENTATION_270:
+				g_drmEffectiveOrientation[screenType]  = DRM_MODE_ROTATE_270;
+				break;
+			case PANEL_EXTERNAL_ORIENTATION_AUTO:
+				g_drmEffectiveOrientation[screenType]  = determine_drm_orientation(drm, conn, mode);
+				break;
+		}
+		return;
+	}
+	else if ( screenType == DRM_SCREEN_TYPE_INTERNAL )
 	{
 		switch ( g_drmModeOrientation )
 		{
@@ -2566,6 +2656,18 @@ int drm_prepare( struct drm_t *drm, bool async, const struct FrameInfo_t *frameI
 				if (ret < 0)
 					return ret;
 			}
+			if (crtc->lut3d_size)
+			{
+				int ret = add_crtc_property(drm->req, crtc, "VALVE1_LUT3D", 0);
+				if (ret < 0)
+					return ret;
+			}
+			if (crtc->shaperlut_size)
+			{
+				int ret = add_crtc_property(drm->req, crtc, "VALVE1_SHAPER_LUT", 0);
+				if (ret < 0)
+					return ret;
+			}
 			if (crtc->has_vrr_enabled)
 			{
 				int ret = add_crtc_property(drm->req, crtc, "VRR_ENABLED", 0);
@@ -2816,11 +2918,27 @@ bool drm_get_vrr_in_use(struct drm_t *drm)
 
 drm_screen_type drm_get_connector_type(drmModeConnector *connector)
 {
-	if (connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
-		connector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
-		connector->connector_type == DRM_MODE_CONNECTOR_DSI)
-		return DRM_SCREEN_TYPE_INTERNAL;
-
+	// Set to the default state of false to make sure the external display isn't rotated when a system is docked
+	g_bDisplayTypeInternal = false;
+	switch ( g_drmPanelType )
+	{
+		case PANEL_TYPE_INTERNAL:
+			return DRM_SCREEN_TYPE_INTERNAL;
+			break;
+		case PANEL_TYPE_EXTERNAL:
+			if (connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+					connector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+					connector->connector_type == DRM_MODE_CONNECTOR_DSI)
+					g_bDisplayTypeInternal = true;
+			return DRM_SCREEN_TYPE_EXTERNAL;
+			break;
+		case PANEL_TYPE_AUTO:
+			if (connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+					connector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+					connector->connector_type == DRM_MODE_CONNECTOR_DSI)
+					return DRM_SCREEN_TYPE_INTERNAL;
+			break;
+	}
 	return DRM_SCREEN_TYPE_EXTERNAL;
 }
 
@@ -2834,7 +2952,7 @@ drm_screen_type drm_get_screen_type(struct drm_t *drm)
 
 bool drm_update_color_mgmt(struct drm_t *drm)
 {
-	if ( !drm_supports_color_mgmt( drm ) )
+	if ( !drm->crtc || !drm->connector || !drm->crtc->shaperlut_size || !drm->crtc->lut3d_size )
 		return true;
 
 	if ( g_ColorMgmt.serial == drm->current.color_mgmt_serial )
@@ -3111,10 +3229,10 @@ bool drm_supports_color_mgmt(struct drm_t *drm)
 	if (g_bForceDisableColorMgmt)
 		return false;
 
-	if (!drm->primary)
+	if (!drm->crtc)
 		return false;
 
-	return drm->primary->has_color_mgmt;
+	return drm->crtc->has_valve1_regamma_tf;
 }
 
 void drm_get_native_colorimetry( struct drm_t *drm,
@@ -3149,4 +3267,13 @@ void drm_get_native_colorimetry( struct drm_t *drm,
 		*displayEOTF = EOTF_Gamma22;
 		*outputEncodingEOTF = EOTF_Gamma22;
 	}
+}
+
+
+std::span<uint32_t> drm_get_valid_refresh_rates( struct drm_t *drm )
+{
+	if (drm && drm->connector)
+		return drm->connector->valid_display_rates;
+
+	return std::span<uint32_t>{};
 }

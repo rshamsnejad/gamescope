@@ -2765,8 +2765,7 @@ bool vulkan_remake_swapchain( void )
 	g_device.vk.DestroySwapchainKHR( g_device.device(), pOutput->swapChain, nullptr );
 
 	// Delete screenshot image to be remade if needed
-	for (auto& pScreenshotImage : pOutput->pScreenshotImages)
-		pScreenshotImage = nullptr;
+	pOutput->pScreenshotImage = nullptr;
 
 	bool bRet = vulkan_make_swapchain( pOutput );
 	assert( bRet ); // Something has gone horribly wrong!
@@ -2858,8 +2857,7 @@ bool vulkan_remake_output_images()
 	pOutput->nOutImage = 0;
 
 	// Delete screenshot image to be remade if needed
-	for (auto& pScreenshotImage : pOutput->pScreenshotImages)
-		pScreenshotImage = nullptr;
+	pOutput->pScreenshotImage = nullptr;
 
 	bool bRet = vulkan_make_output_images( pOutput );
 	assert( bRet );
@@ -3107,11 +3105,6 @@ std::shared_ptr<CVulkanTexture> vulkan_create_texture_from_bits( uint32_t width,
 	return pTex;
 }
 
-bool float_is_integer(float x)
-{
-	return fabsf(ceilf(x) - x) <= 0.0001f;
-}
-
 static uint32_t s_frameId = 0;
 
 void vulkan_garbage_collect( void )
@@ -3119,37 +3112,33 @@ void vulkan_garbage_collect( void )
 	g_device.garbageCollect();
 }
 
-std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, bool exportable, uint32_t drmFormat, EStreamColorspace colorspace)
+std::shared_ptr<CVulkanTexture> vulkan_create_screenshot_texture(uint32_t width, uint32_t height, uint32_t drmFormat, bool exportable)
 {
-	for (auto& pScreenshotImage : g_output.pScreenshotImages)
-	{
-		if (pScreenshotImage == nullptr)
-		{
-			pScreenshotImage = std::make_shared<CVulkanTexture>();
+	std::shared_ptr<CVulkanTexture> pTex = std::make_shared<CVulkanTexture>();
 
-			CVulkanTexture::createFlags screenshotImageFlags;
-			screenshotImageFlags.bMappable = true;
-			screenshotImageFlags.bTransferDst = true;
-			screenshotImageFlags.bStorage = true;
-			if (exportable || drmFormat == DRM_FORMAT_NV12) {
-				screenshotImageFlags.bExportable = true;
-				screenshotImageFlags.bLinear = true; // TODO: support multi-planar DMA-BUF export via PipeWire
-			}
-
-			bool bSuccess = pScreenshotImage->BInit( width, height, 1u, drmFormat, screenshotImageFlags );
-			pScreenshotImage->setStreamColorspace(colorspace);
-
-			assert( bSuccess );
-		}
-
-		if (pScreenshotImage.use_count() > 1 || width != pScreenshotImage->width() || height != pScreenshotImage->height())
-			continue;
-
-		return pScreenshotImage;
+	CVulkanTexture::createFlags flags;
+	flags.bTransferDst = true;
+	flags.bStorage = true;
+	flags.bLinear = true; // TODO: support multi-planar DMA-BUF export via PipeWire
+	if (exportable) {
+		flags.bExportable = true;
+	} else {
+		flags.bMappable = true;
 	}
 
-	vk_log.errorf("Unable to acquire screenshot texture. Out of textures.");
-	return nullptr;
+	assert( pTex->BInit( width, height, 1u, drmFormat, flags ) );
+
+	return pTex;
+}
+
+std::shared_ptr<CVulkanTexture> vulkan_acquire_screenshot_texture(uint32_t width, uint32_t height, uint32_t drmFormat)
+{
+	auto& pScreenshotImage = g_output.pScreenshotImage;
+	if ( pScreenshotImage == nullptr || pScreenshotImage->width() != width || pScreenshotImage->height() != height)
+	{
+		pScreenshotImage = vulkan_create_screenshot_texture(width, height, drmFormat);
+	}
+	return pScreenshotImage;
 }
 
 // Internal display's native brightness.
@@ -3167,6 +3156,9 @@ struct BlitPushData_t
 	uint32_t frameId;
 	uint32_t blurRadius;
 
+	uint8_t u_shaderFilter[k_nMaxLayers];
+    uint8_t u_padding[2];
+
     float u_linearToNits; // unset
     float u_nitsToLinear; // unset
     float u_itmSdrNits; // unset
@@ -3179,6 +3171,11 @@ struct BlitPushData_t
 			scale[i] = layer->scale;
 			offset[i] = layer->offsetPixelCenter();
 			opacity[i] = layer->opacity;
+            if (layer->isScreenSize() || (layer->filter == GamescopeUpscaleFilter::LINEAR && layer->viewConvertsToLinearAutomatically()))
+                u_shaderFilter[i] = (uint32_t)GamescopeUpscaleFilter::FROM_VIEW;
+            else
+                u_shaderFilter[i] = (uint32_t)layer->filter;
+
 		}
 		borderMask = frameInfo->borderMask();
 		frameId = s_frameId++;
@@ -3194,6 +3191,7 @@ struct BlitPushData_t
 		scale[0] = { blit_scale, blit_scale };
 		offset[0] = { 0.5f, 0.5f };
 		opacity[0] = 1.0f;
+        u_shaderFilter[0] = (uint32_t)GamescopeUpscaleFilter::LINEAR;
 		borderMask = 0;
 		frameId = s_frameId;
 
@@ -3258,6 +3256,9 @@ struct RcasPushData_t
 	uint32_t u_frameId;
 	uint32_t u_c1;
 
+	uint8_t u_shaderFilter[k_nMaxLayers];
+    uint8_t u_padding[2];
+
     float u_linearToNits; // unset
     float u_nitsToLinear; // unset
     float u_itmSdrNits; // unset
@@ -3270,6 +3271,7 @@ struct RcasPushData_t
 		u_layer0Offset.x = uint32_t(int32_t(frameInfo->layers[0].offset.x));
 		u_layer0Offset.y = uint32_t(int32_t(frameInfo->layers[0].offset.y));
 		u_opacity[0] = frameInfo->layers[0].opacity;
+        u_shaderFilter[0] = (uint32_t)GamescopeUpscaleFilter::FROM_VIEW;
 		u_borderMask = frameInfo->borderMask() >> 1u;
 		u_frameId = s_frameId++;
 		u_c1 = tmp.x;
@@ -3311,12 +3313,10 @@ void bind_all_layers(CVulkanCmdBuffer* cmdBuffer, const struct FrameInfo_t *fram
 	{
 		const FrameInfo_t::Layer_t *layer = &frameInfo->layers[i];
 
-		bool bForceNearest = layer->scale.x == 1.0f &&
-							 layer->scale.y == 1.0f &&
-							 float_is_integer(layer->offset.x) &&
-							 float_is_integer(layer->offset.y);
+		bool nearest = layer->isScreenSize()
+                    || layer->filter == GamescopeUpscaleFilter::NEAREST
+                    || (layer->filter == GamescopeUpscaleFilter::LINEAR && !layer->viewConvertsToLinearAutomatically());
 
-		bool nearest = bForceNearest | !layer->linearFilter;
 		cmdBuffer->bindTexture(i, layer->tex);
 		cmdBuffer->setTextureSrgb(i, false);
 		cmdBuffer->setSamplerNearest(i, nearest);

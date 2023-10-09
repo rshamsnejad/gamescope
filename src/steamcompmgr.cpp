@@ -752,6 +752,63 @@ static int g_nDynamicRefreshRate[DRM_SCREEN_TYPE_COUNT] = { 0, 0 };
 // Delay to stop modes flickering back and forth.
 static const uint64_t g_uDynamicRefreshDelay = 600'000'000; // 600ms
 
+static int g_nCombinedAppRefreshCycleOverride[DRM_SCREEN_TYPE_COUNT] = { 0, 0 };
+
+static void update_app_target_refresh_cycle()
+{
+	if ( BIsNested() )
+	{
+		g_nDynamicRefreshRate[ DRM_SCREEN_TYPE_INTERNAL ] = 0;
+		g_nSteamCompMgrTargetFPS = g_nCombinedAppRefreshCycleOverride[ DRM_SCREEN_TYPE_INTERNAL ];
+		return;
+	}
+
+	static drm_screen_type last_type;
+	static int last_target_fps;
+	static bool first = true;
+
+	drm_screen_type type = drm_get_screen_type( &g_DRM );
+	int target_fps = g_nCombinedAppRefreshCycleOverride[type];
+
+	if ( !first && type == last_type && last_target_fps == target_fps )
+	{
+		return;
+	}
+
+	last_type = type;
+	last_target_fps = target_fps;
+	first = false;
+
+	if ( !target_fps )
+	{
+		g_nDynamicRefreshRate[ type ] = 0;
+		g_nSteamCompMgrTargetFPS = 0;
+		return;
+	}
+
+	auto rates = drm_get_valid_refresh_rates( &g_DRM );
+
+	g_nDynamicRefreshRate[ type ] = 0;
+	g_nSteamCompMgrTargetFPS = target_fps;
+
+	// Find highest mode to do refresh doubling with.
+	for ( auto rate = rates.rbegin(); rate != rates.rend(); rate++ )
+	{
+		if (*rate % target_fps == 0)
+		{
+			g_nDynamicRefreshRate[ type ] = *rate;
+			g_nSteamCompMgrTargetFPS = target_fps;
+			return;
+		}
+	}
+}
+
+void steamcompmgr_set_app_refresh_cycle_override( drm_screen_type type, int override_fps )
+{
+	g_nCombinedAppRefreshCycleOverride[ type ] = override_fps;
+	update_app_target_refresh_cycle();
+}
+
 static int g_nRuntimeInfoFd = -1;
 
 bool g_bFSRActive = false;
@@ -1886,7 +1943,7 @@ void MouseCursor::paint(steamcompmgr_win_t *window, steamcompmgr_win_t *fit, str
 	layer->tex = m_texture;
 	layer->fbid = BIsNested() ? 0 : m_texture->fbid();
 
-	layer->linearFilter = cursor_scale != 1.0f;
+	layer->filter = cursor_scale != 1.0f ? GamescopeUpscaleFilter::LINEAR : GamescopeUpscaleFilter::NEAREST;
 	layer->blackBorder = false;
 	layer->colorspace = GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 }
@@ -1916,6 +1973,7 @@ struct BaseLayerInfo_t
 	float scale[2];
 	float offset[2];
 	float opacity;
+	GamescopeUpscaleFilter filter;
 };
 
 std::array< BaseLayerInfo_t, HELD_COMMIT_COUNT > g_CachedPlanes = {};
@@ -1937,7 +1995,7 @@ paint_cached_base_layer(const std::shared_ptr<commit_t>& commit, const BaseLayer
 	layer->tex = commit->vulkanTex;
 	layer->fbid = commit->fb_id;
 
-	layer->linearFilter = true;
+	layer->filter = base.filter;
 	layer->blackBorder = true;
 }
 
@@ -2137,8 +2195,15 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 	layer->tex = lastCommit->vulkanTex;
 	layer->fbid = lastCommit->fb_id;
 
-	layer->linearFilter = (w->isOverlay || w->isExternalOverlay) ? true : g_upscaleFilter != GamescopeUpscaleFilter::NEAREST;
+	layer->filter = (w->isOverlay || w->isExternalOverlay) ? GamescopeUpscaleFilter::LINEAR : g_upscaleFilter;
 	layer->colorspace = lastCommit->colorspace();
+
+	if (layer->filter == GamescopeUpscaleFilter::PIXEL)
+	{
+		// Don't bother doing more expensive filtering if we are sharp + integer.
+		if (float_is_integer(currentScaleRatio_x) && float_is_integer(currentScaleRatio_y))
+			layer->filter = GamescopeUpscaleFilter::NEAREST;
+	}
 
 	if ( flags & PaintWindowFlag::BasePlane )
 	{
@@ -2148,6 +2213,7 @@ paint_window(steamcompmgr_win_t *w, steamcompmgr_win_t *scaleW, struct FrameInfo
 		basePlane.offset[0] = layer->offset.x;
 		basePlane.offset[1] = layer->offset.y;
 		basePlane.opacity = layer->opacity;
+		basePlane.filter = layer->filter;
 
 		g_CachedPlanes[ HELD_COMMIT_BASE ] = basePlane;
 		if ( !(flags & PaintWindowFlag::FadeTarget) )
@@ -2410,6 +2476,8 @@ paint_all(bool async)
 	pw_buffer = dequeue_pipewire_buffer();
 #endif
 
+	update_app_target_refresh_cycle();
+
 	int nDynamicRefresh = g_nDynamicRefreshRate[drm_get_screen_type( &g_DRM )];
 
 	int nTargetRefresh = nDynamicRefresh && steamcompmgr_window_should_limit_fps( global_focus.focusWindow )// && !global_focus.overlayWindow
@@ -2424,7 +2492,9 @@ paint_all(bool async)
 	if ( !BIsNested() && g_nOutputRefresh != nTargetRefresh && g_uDynamicRefreshEqualityTime + g_uDynamicRefreshDelay < now )
 		drm_set_refresh( &g_DRM, nTargetRefresh );
 
-	bool bNeedsNearest = g_upscaleFilter == GamescopeUpscaleFilter::NEAREST && frameInfo.layers[0].scale.x != 1.0f && frameInfo.layers[0].scale.y != 1.0f;
+	bool bLayer0ScreenSize = close_enough(frameInfo.layers[0].scale.x, 1.0f) && close_enough(frameInfo.layers[0].scale.y, 1.0f);
+
+	bool bNeedsCompositeFromFilter = (g_upscaleFilter == GamescopeUpscaleFilter::NEAREST || g_upscaleFilter == GamescopeUpscaleFilter::PIXEL) && !bLayer0ScreenSize;
 
 	// Disable partial composition for now until we get
 	// composite priorities working in libliftoff + also
@@ -2440,7 +2510,7 @@ paint_all(bool async)
 	bNeedsFullComposite |= frameInfo.useFSRLayer0;
 	bNeedsFullComposite |= frameInfo.useNISLayer0;
 	bNeedsFullComposite |= frameInfo.blurLayer0;
-	bNeedsFullComposite |= bNeedsNearest;
+	bNeedsFullComposite |= bNeedsCompositeFromFilter;
 	bNeedsFullComposite |= bDrewCursor;
 	bNeedsFullComposite |= g_bColorSliderInUse;
 	bNeedsFullComposite |= fadingOut;
@@ -2607,7 +2677,7 @@ paint_all(bool async)
 				baseLayer->applyColorMgmt = false;
 				baseLayer->allowBlending = false;
 
-				baseLayer->linearFilter = false;
+				baseLayer->filter = GamescopeUpscaleFilter::NEAREST;
 				baseLayer->colorspace = g_bOutputHDREnabled ? GAMESCOPE_APP_TEXTURE_COLORSPACE_HDR10_PQ : GAMESCOPE_APP_TEXTURE_COLORSPACE_SRGB;
 
 				g_bWasPartialComposite = false;
@@ -2633,7 +2703,7 @@ paint_all(bool async)
 					overlayLayer->applyColorMgmt = g_ColorMgmt.pending.enabled;
 					overlayLayer->allowBlending = g_ColorMgmt.pending.enabled;
 
-					overlayLayer->linearFilter = false;
+					overlayLayer->filter = GamescopeUpscaleFilter::NEAREST;
 					// Partial composition stuff has the same colorspace.
 					// So read that from the composite frame info
 					overlayLayer->colorspace = compositeFrameInfo.layers[0].colorspace;
@@ -2733,15 +2803,7 @@ paint_all(bool async)
 
 	if ( takeScreenshot )
 	{
-		constexpr bool bHackForceNV12DumpScreenshot = false;
-
-		uint32_t drmCaptureFormat = bHackForceNV12DumpScreenshot
-			? DRM_FORMAT_NV12
-			: DRM_FORMAT_XRGB8888;
-
-		std::shared_ptr<CVulkanTexture> pScreenshotTexture = vulkan_acquire_screenshot_texture(g_nOutputWidth, g_nOutputHeight, false, drmCaptureFormat);
-
-		assert( pScreenshotTexture != nullptr );
+		std::shared_ptr<CVulkanTexture> pScreenshotTexture = vulkan_acquire_screenshot_texture(g_nOutputWidth, g_nOutputHeight, DRM_FORMAT_XRGB8888);
 
 		// Basically no color mgmt applied for screenshots. (aside from being able to handle HDR content with LUTs)
 		for ( uint32_t nInputEOTF = 0; nInputEOTF < EOTF_Count; nInputEOTF++ )
@@ -5333,6 +5395,13 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			size_t server_idx = size_t{ xwayland_mode_ctl[ 0 ] };
 			int width = xwayland_mode_ctl[ 1 ];
 			int height = xwayland_mode_ctl[ 2 ];
+
+			if ( g_nOutputWidth != 1280 && width == 1280 )
+			{
+				width = g_nOutputWidth;
+				height = g_nOutputHeight;
+			}
+
 			bool allowSuperRes = !!xwayland_mode_ctl[ 3 ];
 
 			if ( !allowSuperRes )
@@ -6444,6 +6513,12 @@ spawn_client( char **argv )
 
 		// Enable Gamescope WSI by default for nested.
 		setenv( "ENABLE_GAMESCOPE_WSI", "1", 0 );
+		if ( !g_bExposeWayland )
+		{
+			// If we are not running with --expose-wayland
+			// set SDL_VIDEODRIVER back to x11.
+			setenv("SDL_VIDEODRIVER", "x11", 1);
+		}
 		execvp( argv[ 0 ], argv );
 
 		xwm_log.errorf_errno( "execvp failed" );
@@ -7632,6 +7707,7 @@ steamcompmgr_main(int argc, char **argv)
 		{
 			int nRealRefresh = g_nNestedRefresh ? g_nNestedRefresh : g_nOutputRefresh;
 			int nTargetFPS = g_nSteamCompMgrTargetFPS ? g_nSteamCompMgrTargetFPS : nRealRefresh;
+			nTargetFPS = std::min<int>( nTargetFPS, nRealRefresh );
 			int nMultiplier = nRealRefresh / nTargetFPS;
 
 			int nAppRefresh = nRealRefresh * nMultiplier;
