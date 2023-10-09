@@ -332,6 +332,7 @@ enum g_rotate_ctl{
 	UPSIDEDOWN,
 	RIGHT_UP,
 };
+
 enum g_panel_external_orientation {
 	PANEL_EXTERNAL_ORIENTATION_0,	/* NORMAL */
 	PANEL_EXTERNAL_ORIENTATION_270,	/* RIGHT */
