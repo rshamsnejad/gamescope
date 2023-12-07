@@ -139,8 +139,6 @@ extern float g_flHDRItmTargetNits;
 
 uint64_t g_lastWinSeq = 0;
 
-extern std::atomic<uint64_t> g_lastVblank;
-
 static std::shared_ptr<wlserver_ctm> s_scRGB709To2020Matrix;
 
 std::string clipboard;
@@ -154,6 +152,16 @@ bool g_bSteamIsActiveWindow = false;
 uint64_t timespec_to_nanos(struct timespec& spec)
 {
 	return spec.tv_sec * 1'000'000'000ul + spec.tv_nsec;
+}
+
+timespec nanos_to_timespec( uint64_t ulNanos )
+{
+	timespec ts =
+	{
+		.tv_sec = time_t( ulNanos / 1'000'000'000ul ),
+		.tv_nsec = long( ulNanos % 1'000'000'000ul ),
+	};
+	return ts;
 }
 
 static void
@@ -882,7 +890,7 @@ bool			synchronize;
 
 std::mutex g_SteamCompMgrXWaylandServerMutex;
 
-VBlankTimeInfo_t g_SteamCompMgrVBlankTime = {};
+gamescope::VBlankTime g_SteamCompMgrVBlankTime = {};
 
 uint64_t g_uCurrentBasePlaneCommitID = 0;
 bool g_bCurrentBasePlaneIsFifo = false;
@@ -1194,9 +1202,7 @@ uint64_t get_time_in_nanos()
 
 void sleep_for_nanos(uint64_t nanos)
 {
-	timespec ts;
-	ts.tv_sec = time_t(nanos / 1'000'000'000ul);
-	ts.tv_nsec = long(nanos % 1'000'000'000ul);
+	timespec ts = nanos_to_timespec( nanos );
 	nanosleep(&ts, nullptr);
 }
 
@@ -1364,7 +1370,7 @@ import_commit ( steamcompmgr_win_t *w, struct wlr_surface *surf, struct wlr_buff
 
 		/* Unlock here to avoid deadlock [1],
 		 * drm_lock_fbid calls wlserver_lock.
-		 * Map is no longer used here and the element 
+		 * Map is no longer used here and the element
 		 * is no longer accessed. */
 		lock.unlock();
 
@@ -1908,7 +1914,7 @@ bool MouseCursor::getTexture()
 				{
 					pixels[i * image->width + j] = image->pixels[i * image->width + j];
 				}
-			} 
+			}
 			std::vector<uint32_t> resizeBuffer( nDesiredWidth * nDesiredHeight );
 			stbir_resize_uint8_srgb( (unsigned char *)pixels.data(),       image->width,  image->height,  0,
 									 (unsigned char *)resizeBuffer.data(), nDesiredWidth, nDesiredHeight, 0,
@@ -2449,7 +2455,7 @@ paint_all(bool async)
 					}
 				}
 			}
-			
+
 			int nOldLayerCount = frameInfo.layerCount;
 
 			uint32_t flags = 0;
@@ -2457,7 +2463,7 @@ paint_all(bool async)
 				flags |= PaintWindowFlag::BasePlane;
 			paint_window(w, w, &frameInfo, global_focus.cursor, flags);
 			update_touch_scaling( &frameInfo );
-			
+
 			// paint UI unless it's fully hidden, which it communicates to us through opacity=0
 			// we paint it to extract scaling coefficients above, then remove the layer if one was added
 			if ( w->opacity == TRANSLUCENT && bHasVideoUnderlay && nOldLayerCount < frameInfo.layerCount )
@@ -2470,7 +2476,7 @@ paint_all(bool async)
 				float opacityScale = g_bPendingFade
 					? 0.0f
 					: ((currentTime - fadeOutStartTime) / (float)g_FadeOutDuration);
-		
+
 				paint_cached_base_layer(g_HeldCommits[HELD_COMMIT_FADE], g_CachedPlanes[HELD_COMMIT_FADE], &frameInfo, 1.0f - opacityScale);
 				paint_window(w, w, &frameInfo, global_focus.cursor, PaintWindowFlag::BasePlane | PaintWindowFlag::FadeTarget | PaintWindowFlag::DrawBorders, opacityScale, override);
 			}
@@ -2540,7 +2546,7 @@ paint_all(bool async)
 		if ( !BIsNested() && tex != nullptr )
 		{
 			// HACK! HACK HACK HACK
-			// To avoid stutter when toggling the overlay on 
+			// To avoid stutter when toggling the overlay on
 			int curLayer = frameInfo.layerCount++;
 
 			FrameInfo_t::Layer_t *layer = &frameInfo.layers[ curLayer ];
@@ -2730,7 +2736,7 @@ paint_all(bool async)
 	}
 
 	// Update to let the vblank manager know we are currently compositing.
-	g_bCurrentlyCompositing = bDoComposite;
+	g_VBlankTimer.UpdateWasCompositing( bDoComposite );
 
 	if ( bDoComposite == true )
 	{
@@ -2827,7 +2833,7 @@ paint_all(bool async)
 			}
 
 			// Update the time it took us to commit
-			g_uVblankDrawTimeNS = get_time_in_nanos() - g_SteamCompMgrVBlankTime.pipe_write_time;
+			g_VBlankTimer.UpdateLastDrawTime( get_time_in_nanos() - g_SteamCompMgrVBlankTime.ulWakeupTime );
 		}
 		else
 		{
@@ -3319,7 +3325,7 @@ win_maybe_a_dropdown( steamcompmgr_win_t *w )
 	//
 	// TODO: Come back to me for original Age of Empires HD launcher.
 	// Does that use it? It wants blending!
-	// 
+	//
 	// Only do this if we have CONTROLPARENT right now. Some other apps, such as the
 	// Street Fighter V (310950) Splash Screen also use LAYERED and TOOLWINDOW, and we don't
 	// want that to be overlayed.
@@ -3334,12 +3340,12 @@ win_maybe_a_dropdown( steamcompmgr_win_t *w )
 
 	// Josh:
 	// The logic here is as follows. The window will be treated as a dropdown if:
-	// 
+	//
 	// If this window has a fixed position on the screen + static gravity:
 	//  - If the window has either skipPage or skipTaskbar
 	//    - If the window isn't a dialog, always treat it as a dropdown, as it's
 	//      probably meant to be some form of popup.
-	//    - If the window is a dialog 
+	//    - If the window is a dialog
 	// 		- If the window has transient for, disregard it, as it is trying to redirecting us elsewhere
 	//        ie. a settings menu dialog popup or something.
 	//      - If the window has both skip taskbar and pager, treat it as a dialog.
@@ -3431,7 +3437,7 @@ static bool is_good_override_candidate( steamcompmgr_win_t *override, steamcompm
 		return false;
 
 	return override != focus && override->xwayland().a.x >= 0 && override->xwayland().a.y >= 0;
-} 
+}
 
 static bool
 pick_primary_focus_and_override(focus_t *out, Window focusControlWindow, const std::vector<steamcompmgr_win_t*>& vecPossibleFocusWindows, bool globalFocus, const std::vector<uint32_t>& ctxFocusControlAppIDs)
@@ -3581,7 +3587,7 @@ found:;
 
 	if ( focus )
 	{
-		if ( window_has_commits( focus ) ) 
+		if ( window_has_commits( focus ) )
 			out->focusWindow = focus;
 		else
 			out->outdatedInteractiveFocus = true;
@@ -3624,9 +3630,9 @@ found:;
 					override_focus = fake_override;
 					goto found2;
 				}
-			}	
+			}
 		}
-		
+
 		found2:;
 		resolveTransientOverrides( true );
 	}
@@ -4891,7 +4897,7 @@ destroy_win(xwayland_ctx_t *ctx, Window id, bool gone, bool fade)
 		global_focus.overrideWindow = nullptr;
 	if (x11_win(global_focus.fadeWindow) == id && gone)
 		global_focus.fadeWindow = nullptr;
-		
+
 	focusDirty = true;
 
 	finish_destroy_win(ctx, id, gone);
@@ -5495,7 +5501,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 		{
 			get_win_type(ctx, w);
 			focusDirty = true;
-		}		
+		}
 	}
 	if (ev->atom == ctx->atoms.sizeHintsAtom)
 	{
@@ -5593,6 +5599,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			focusDirty = true;
 		}
 	}
+#if 0
 	if ( ev->atom == ctx->atoms.gamescopeTuneableVBlankRedZone )
 	{
 		g_uVblankDrawBufferRedZoneNS = (uint64_t)get_prop( ctx, ctx->root, ctx->atoms.gamescopeTuneableVBlankRedZone, g_uDefaultVBlankRedZone );
@@ -5601,6 +5608,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 	{
 		g_uVBlankRateOfDecayPercentage = (uint64_t)get_prop( ctx, ctx->root, ctx->atoms.gamescopeTuneableRateOfDecay, g_uDefaultVBlankRateOfDecayPercentage );
 	}
+#endif
 	if ( ev->atom == ctx->atoms.gamescopeScalingFilter )
 	{
 		int nScalingMode = get_prop( ctx, ctx->root, ctx->atoms.gamescopeScalingFilter, 0 );
@@ -6403,7 +6411,7 @@ void handle_done_commits_xwayland( xwayland_ctx_t *ctx, bool vblank, uint64_t vb
 {
 	std::lock_guard<std::mutex> lock( ctx->doneCommits.listCommitsDoneLock );
 
-	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.schedule.ulTargetVBlank;
 
 	// commits that were not ready to be presented based on their display timing.
 	static std::vector< CommitDoneEntry_t > commits_before_their_time;
@@ -6460,7 +6468,7 @@ void handle_done_commits_xdg()
 {
 	std::lock_guard<std::mutex> lock( g_steamcompmgr_xdg_done_commits.listCommitsDoneLock );
 
-	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.schedule.ulTargetVBlank;
 
 	// commits that were not ready to be presented based on their display timing.
 	std::vector< CommitDoneEntry_t > commits_before_their_time;
@@ -6494,9 +6502,7 @@ void handle_done_commits_xdg()
 
 void handle_presented_for_window( steamcompmgr_win_t* w )
 {
-	// wlserver_lock is held.
-
-	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.target_vblank_time;
+	uint64_t next_refresh_time = g_SteamCompMgrVBlankTime.schedule.ulTargetVBlank;
 
 	uint64_t refresh_cycle = g_nSteamCompMgrTargetFPS && steamcompmgr_window_should_limit_fps( w )
 		? g_SteamCompMgrLimitedAppRefreshCycle
@@ -7014,41 +7020,6 @@ void xwayland_ctx_t::Dispatch()
 	}
 }
 
-static bool
-dispatch_vblank( int fd )
-{
-	bool vblank = false;
-	for (;;)
-	{
-		VBlankTimeInfo_t vblanktime = {};
-		ssize_t ret = read( fd, &vblanktime, sizeof( vblanktime ) );
-		if ( ret < 0 )
-		{
-			if ( errno == EAGAIN )
-				break;
-
-			xwm_log.errorf_errno( "steamcompmgr: dispatch_vblank: read failed" );
-			break;
-		}
-
-		g_SteamCompMgrVBlankTime = vblanktime;
-
-		uint64_t diff = get_time_in_nanos() - vblanktime.pipe_write_time;
-
-		// give it 1 ms of slack from pipe to steamcompmgr... maybe too long
-		if ( diff > 1'000'000ul )
-		{
-			gpuvis_trace_printf( "ignored stale vblank" );
-		}
-		else
-		{
-			gpuvis_trace_printf( "got vblank" );
-			vblank = true;
-		}
-	}
-	return vblank;
-}
-
 struct rgba_t
 {
 	uint8_t r,g,b,a;
@@ -7515,7 +7486,7 @@ void update_mode_atoms(xwayland_ctx_t *root_ctx, bool* needs_flush = nullptr)
 	}
 	XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplayModeListExternal, XA_STRING, 8, PropModeReplace,
 		(unsigned char *)modes, strlen(modes) + 1 );
-	
+
 	uint32_t one = 1;
 	XChangeProperty(root_ctx->dpy, root_ctx->root, root_ctx->atoms.gamescopeDisplayIsExternal, XA_CARDINAL, 32, PropModeReplace,
 		(unsigned char *)&one, 1 );
@@ -7692,9 +7663,6 @@ steamcompmgr_main(int argc, char **argv)
 		vrsession_steam_mode( steamMode );
 #endif
 
-	int vblankFD = vblank_init();
-	assert( vblankFD >= 0 );
-
 	std::unique_lock<std::mutex> xwayland_server_guard(g_SteamCompMgrXWaylandServerMutex);
 
 	// Initialize any xwayland ctxs we have
@@ -7728,12 +7696,8 @@ steamcompmgr_main(int argc, char **argv)
 	}
 
 	bool vblank = false;
-	g_SteamCompMgrWaiter.AddWaitable(
-		new gamescope::CFunctionWaitable{ vblankFD, [ vblankFD, &vblank ]()
-		{
-			vblank = dispatch_vblank( vblankFD );
-		}}
-	);
+	g_SteamCompMgrWaiter.AddWaitable( &g_VBlankTimer );
+	g_VBlankTimer.RearmTimer( true );
 
 	{
 		gamescope_xwayland_server_t *pServer = NULL;
@@ -7778,6 +7742,12 @@ steamcompmgr_main(int argc, char **argv)
 		}
 
 		g_SteamCompMgrWaiter.PollEvents();
+
+		if ( std::optional<gamescope::VBlankTime> pendingVBlank = g_VBlankTimer.ProcessVBlank() )
+		{
+			g_SteamCompMgrVBlankTime = *pendingVBlank;
+			vblank = true;
+		}
 
 		if ( g_bRun == false )
 		{
@@ -8077,13 +8047,13 @@ steamcompmgr_main(int argc, char **argv)
 		// If we are compositing, always force sync flips because we currently wait
 		// for composition to finish before submitting.
 		// If we want to do async + composite, we should set up syncfile stuff and have DRM wait on it.
-		const bool bNeedsSyncFlip = bForceSyncFlip || g_bCurrentlyCompositing || nIgnoredOverlayRepaints;
+		const bool bNeedsSyncFlip = bForceSyncFlip || g_VBlankTimer.WasCompositing() || nIgnoredOverlayRepaints;
 		const bool bDoAsyncFlip   = ( ((g_nAsyncFlipsEnabled >= 1) && g_bSupportsAsyncFlips && bSurfaceWantsAsync && !bHasOverlay) || bVRR ) && !bSteamOverlayOpen && !bNeedsSyncFlip;
 
 		bool bShouldPaint = false;
 		if ( bDoAsyncFlip )
 		{
-			if ( hasRepaint && !g_bCurrentlyCompositing )
+			if ( hasRepaint && !g_VBlankTimer.WasCompositing() )
 				bShouldPaint = true;
 		}
 		else
@@ -8110,6 +8080,16 @@ steamcompmgr_main(int argc, char **argv)
 			hasRepaint = false;
 			hasRepaintNonBasePlane = false;
 			nIgnoredOverlayRepaints = 0;
+		}
+
+		if ( vblank )
+		{
+			// Pre-emptively re-arm the vblank timer if it
+			// isn't already re-armed.
+			//
+			// Juuust in case pageflip handler doesn't happen
+			// so we don't stop vblanking forever.
+			g_VBlankTimer.RearmTimer( true );
 		}
 
 		update_vrr_atoms(root_ctx, false, &flush_root);
@@ -8147,7 +8127,7 @@ void steamcompmgr_send_frame_done_to_focus_window()
 	{
 		wlserver_lock();
 		wlserver_send_frame_done( global_focus.focusWindow->xwayland().surface.main_surface , &now );
-		wlserver_unlock();		
+		wlserver_unlock();
 	}
 }
 
