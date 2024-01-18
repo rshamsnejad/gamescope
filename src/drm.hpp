@@ -344,8 +344,27 @@ namespace gamescope
 		const HDRInfo &GetHDRInfo() const { return m_Mutable.HDR; }
 		std::span<const uint32_t> GetValidDynamicRefreshRates() const { return m_Mutable.ValidDynamicRefreshRates; }
 		GamescopeKnownDisplays GetKnownDisplayType() const { return m_Mutable.eKnownDisplay; }
+		enum panel_type {
+			PANEL_TYPE_INTERNAL,
+			PANEL_TYPE_EXTERNAL,
+		};
+
+		enum panel_type type = PANEL_TYPE_EXTERNAL;
+
+		void drm_force_panel_type(panel_type type){
+			type = type;
+		}
+
 		GamescopeScreenType GetScreenType() const
 		{
+			if ( type == PANEL_TYPE_INTERNAL){
+				return GAMESCOPE_SCREEN_TYPE_INTERNAL;
+			}
+
+			if ( type == PANEL_TYPE_EXTERNAL){
+				return GAMESCOPE_SCREEN_TYPE_EXTERNAL;
+			}
+
 			if ( m_pConnector->connector_type == DRM_MODE_CONNECTOR_eDP ||
 				 m_pConnector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
 				 m_pConnector->connector_type == DRM_MODE_CONNECTOR_DSI )
@@ -353,6 +372,7 @@ namespace gamescope
 
 			return GAMESCOPE_SCREEN_TYPE_EXTERNAL;
 		}
+
 		bool IsVRRCapable() const
 		{
 			return this->GetProperties().vrr_capable && !!this->GetProperties().vrr_capable->GetCurrentValue();
@@ -529,8 +549,18 @@ enum drm_panel_orientation {
 	DRM_MODE_PANEL_ORIENTATION_RIGHT_UP,
 };
 
+enum drm_panel_type{
+	PANEL_TYPE_INTERNAL,
+	PANEL_TYPE_EXTERNAL,
+};
+
 extern gamescope::GamescopeModeGeneration g_eGamescopeModeGeneration;
 extern enum g_panel_orientation g_drmModeOrientation;
+
+extern enum drm_panel_type g_PanelType;
+
+extern bool g_bPanelTypeFaked;
+
 
 extern std::atomic<uint64_t> g_drmEffectiveOrientation[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT]; // DRM_MODE_ROTATE_*
 

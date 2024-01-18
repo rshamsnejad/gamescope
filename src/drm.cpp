@@ -49,6 +49,8 @@ uint32_t g_nDRMFormat = DRM_FORMAT_INVALID;
 uint32_t g_nDRMFormatOverlay = DRM_FORMAT_INVALID; // for partial composition, we may have more limited formats than base planes + alpha.
 bool g_bRotated = false;
 bool g_bDebugLayers = false;
+enum drm_panel_type g_PanelType = PANEL_TYPE_EXTERNAL;
+bool g_bPanelTypeFaked = false;
 const char *g_sOutputName = nullptr;
 
 #ifndef DRM_CAP_ATOMIC_ASYNC_PAGE_FLIP
@@ -67,6 +69,7 @@ bool g_bSupportsAsyncFlips = false;
 
 gamescope::GamescopeModeGeneration g_eGamescopeModeGeneration = gamescope::GAMESCOPE_MODE_GENERATE_CVT;
 enum g_panel_orientation g_drmModeOrientation = PANEL_ORIENTATION_AUTO;
+
 std::atomic<uint64_t> g_drmEffectiveOrientation[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT]{ {DRM_MODE_ROTATE_0}, {DRM_MODE_ROTATE_0} };
 
 bool g_bForceDisableColorMgmt = false;
@@ -2803,6 +2806,15 @@ gamescope::GamescopeScreenType drm_get_screen_type(struct drm_t *drm)
 	if ( !drm->pConnector )
 		return gamescope::GAMESCOPE_SCREEN_TYPE_INTERNAL;
 
+	if (g_PanelType == PANEL_TYPE_INTERNAL)
+	{
+		drm->pConnector->drm_force_panel_type(drm->pConnector->PANEL_TYPE_INTERNAL);
+	}
+
+	if (g_PanelType == PANEL_TYPE_EXTERNAL)
+	{
+		drm->pConnector->drm_force_panel_type(drm->pConnector->PANEL_TYPE_EXTERNAL);
+	}
 	return drm->pConnector->GetScreenType();
 }
 
