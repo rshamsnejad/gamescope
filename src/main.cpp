@@ -120,6 +120,7 @@ const struct option *gamescope_options = (struct option[]){
 	{ "disable-xres", no_argument, nullptr, 'x' },
 	{ "fade-out-duration", required_argument, nullptr, 0 },
 	{ "force-orientation", required_argument, nullptr, 0 },
+	{ "force-external-orientation", required_argument, nullptr, 0 },
 	{ "force-panel-type", required_argument, nullptr, 0 },
 	{ "force-windows-fullscreen", no_argument, nullptr, 0 },
 
@@ -170,6 +171,7 @@ const char usage[] =
 	"  --xwayland-count               create N xwayland servers\n"
 	"  --prefer-vk-device             prefer Vulkan device for compositing (ex: 1002:7300)\n"
 	"  --force-orientation            rotate the internal display (left, right, normal, upsidedown)\n"
+	"  --force-external-orientation   rotate the external display (left, right, normal, upsidedown)\n"
 	"  --force-panel-type             force Gamescope to treat the display as either internal or external\n"
 	"  --force-windows-fullscreen     force windows inside of gamescope to be the size of the nested display (fullscreen)\n"
 	"  --cursor-scale-height          if specified, sets a base output height to linearly scale the cursor against.\n"
@@ -387,6 +389,22 @@ static enum g_panel_orientation force_orientation(const char *str)
 		return PANEL_ORIENTATION_180;
 	} else {
 		fprintf( stderr, "gamescope: invalid value for --force-orientation\n" );
+		exit(1);
+	}
+}
+
+static enum g_panel_external_orientation force_external_orientation(const char *str)
+{
+	if (strcmp(str, "normal") == 0) {
+		return PANEL_EXTERNAL_ORIENTATION_0;
+	} else if (strcmp(str, "right") == 0) {
+		return PANEL_EXTERNAL_ORIENTATION_270;
+	} else if (strcmp(str, "left") == 0) {
+		return PANEL_EXTERNAL_ORIENTATION_90;
+	} else if (strcmp(str, "upsidedown") == 0) {
+		return PANEL_EXTERNAL_ORIENTATION_180;
+	} else {
+		fprintf( stderr, "gamescope: invalid value for --force-external-orientation\n" );
 		exit(1);
 	}
 }
@@ -634,6 +652,8 @@ int main(int argc, char **argv)
 					g_eGamescopeModeGeneration = parse_gamescope_mode_generation( optarg );
 				} else if (strcmp(opt_name, "force-orientation") == 0) {
 					g_drmModeOrientation = force_orientation( optarg );
+				} else if (strcmp(opt_name, "force-external-orientation") == 0) {
+					g_drmModeExternalOrientation = force_external_orientation( optarg );
 				} else if (strcmp(opt_name, "force-panel-type") == 0) {
 					g_PanelType = force_panel_type( optarg );
 				} else if (strcmp(opt_name, "sharpness") == 0 ||

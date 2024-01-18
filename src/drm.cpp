@@ -69,6 +69,7 @@ bool g_bSupportsAsyncFlips = false;
 
 gamescope::GamescopeModeGeneration g_eGamescopeModeGeneration = gamescope::GAMESCOPE_MODE_GENERATE_CVT;
 enum g_panel_orientation g_drmModeOrientation = PANEL_ORIENTATION_AUTO;
+enum g_panel_external_orientation g_drmModeExternalOrientation = PANEL_EXTERNAL_ORIENTATION_AUTO;
 
 std::atomic<uint64_t> g_drmEffectiveOrientation[gamescope::GAMESCOPE_SCREEN_TYPE_COUNT]{ {DRM_MODE_ROTATE_0}, {DRM_MODE_ROTATE_0} };
 
@@ -1604,6 +1605,7 @@ static void update_drm_effective_orientation(struct drm_t *drm, gamescope::CDRMC
 
 	if ( eScreenType == gamescope::GAMESCOPE_SCREEN_TYPE_INTERNAL )
 	{
+		drm_log.infof("Rotating internal display orientation");
 		switch ( g_drmModeOrientation )
 		{
 			case PANEL_ORIENTATION_0:
@@ -1623,6 +1625,27 @@ static void update_drm_effective_orientation(struct drm_t *drm, gamescope::CDRMC
 				break;
 		}
 	}
+    else if (eScreenType == gamescope::GAMESCOPE_SCREEN_TYPE_EXTERNAL)
+    {
+		// We are rotating a real external dislay
+		drm_log.infof("Rotating external display orientation");
+        switch (g_drmModeExternalOrientation)
+        {
+        default:
+        case PANEL_EXTERNAL_ORIENTATION_0:
+            g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_0;
+            break;
+        case PANEL_EXTERNAL_ORIENTATION_90:
+            g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_90;
+            break;
+        case PANEL_EXTERNAL_ORIENTATION_180:
+            g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_180;
+            break;
+        case PANEL_EXTERNAL_ORIENTATION_270:
+            g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_270;
+            break;
+        }
+    }
 	else
 	{
 		g_drmEffectiveOrientation[eScreenType] = determine_drm_orientation( drm, pConnector, mode );
@@ -1631,27 +1654,7 @@ static void update_drm_effective_orientation(struct drm_t *drm, gamescope::CDRMC
 
 static void update_drm_effective_orientations( struct drm_t *drm, const drmModeModeInfo *pMode )
 {
-	gamescope::CDRMConnector *pInternalConnector = nullptr;
-	if ( drm->pConnector && drm->pConnector->GetScreenType() == gamescope::GAMESCOPE_SCREEN_TYPE_INTERNAL )
-		pInternalConnector = drm->pConnector;
-
-	if ( !pInternalConnector )
-	{
-		for ( auto &iter : drm->connectors )
-		{
-			gamescope::CDRMConnector *pConnector = &iter.second;
-			if ( pConnector->GetScreenType() == gamescope::GAMESCOPE_SCREEN_TYPE_INTERNAL )
-			{
-				pInternalConnector = pConnector;
-				// Find mode for internal connector instead.
-				pMode = find_mode(pInternalConnector->GetModeConnector(), 0, 0, 0);
-				break;
-			}
-		}
-	}
-
-	if ( pInternalConnector )
-		update_drm_effective_orientation( drm, pInternalConnector, pMode );
+	update_drm_effective_orientation( drm, drm->pConnector, pMode );
 }
 
 // Only used for NV12 buffers

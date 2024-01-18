@@ -347,9 +347,10 @@ namespace gamescope
 		enum panel_type {
 			PANEL_TYPE_INTERNAL,
 			PANEL_TYPE_EXTERNAL,
+			PANEL_TYPE_AUTO,
 		};
 
-		enum panel_type type = PANEL_TYPE_EXTERNAL;
+		enum panel_type type = PANEL_TYPE_AUTO;
 
 		void drm_force_panel_type(panel_type type){
 			type = type;
@@ -357,18 +358,19 @@ namespace gamescope
 
 		GamescopeScreenType GetScreenType() const
 		{
-			if ( type == PANEL_TYPE_INTERNAL){
+			if ( type == PANEL_TYPE_INTERNAL)
 				return GAMESCOPE_SCREEN_TYPE_INTERNAL;
-			}
 
-			if ( type == PANEL_TYPE_EXTERNAL){
+			if ( type == PANEL_TYPE_EXTERNAL)
 				return GAMESCOPE_SCREEN_TYPE_EXTERNAL;
-			}
 
-			if ( m_pConnector->connector_type == DRM_MODE_CONNECTOR_eDP ||
-				 m_pConnector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
-				 m_pConnector->connector_type == DRM_MODE_CONNECTOR_DSI )
-				return GAMESCOPE_SCREEN_TYPE_INTERNAL;
+			if ( type == PANEL_TYPE_AUTO)
+			{
+				if ( m_pConnector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+					m_pConnector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+					m_pConnector->connector_type == DRM_MODE_CONNECTOR_DSI )
+					return GAMESCOPE_SCREEN_TYPE_INTERNAL;
+			}
 
 			return GAMESCOPE_SCREEN_TYPE_EXTERNAL;
 		}
@@ -541,6 +543,14 @@ enum g_panel_orientation {
 	PANEL_ORIENTATION_AUTO,
 };
 
+enum g_panel_external_orientation {
+	PANEL_EXTERNAL_ORIENTATION_0,	/* NORMAL */
+	PANEL_EXTERNAL_ORIENTATION_270,	/* RIGHT */
+	PANEL_EXTERNAL_ORIENTATION_90,	/* LEFT */
+	PANEL_EXTERNAL_ORIENTATION_180,	/* UPSIDE DOWN */
+	PANEL_EXTERNAL_ORIENTATION_AUTO,
+};
+
 enum drm_panel_orientation {
 	DRM_MODE_PANEL_ORIENTATION_UNKNOWN = -1,
 	DRM_MODE_PANEL_ORIENTATION_NORMAL = 0,
@@ -556,7 +566,7 @@ enum drm_panel_type{
 
 extern gamescope::GamescopeModeGeneration g_eGamescopeModeGeneration;
 extern enum g_panel_orientation g_drmModeOrientation;
-
+extern enum g_panel_external_orientation g_drmModeExternalOrientation;
 extern enum drm_panel_type g_PanelType;
 
 extern bool g_bPanelTypeFaked;
