@@ -352,8 +352,8 @@ namespace gamescope
 
 		enum panel_type type = PANEL_TYPE_AUTO;
 
-		void drm_force_panel_type(panel_type type){
-			type = type;
+		void drm_force_panel_type(panel_type target_type){
+			type = target_type;
 		}
 
 		GamescopeScreenType GetScreenType() const
@@ -586,6 +586,7 @@ void drm_lock_fbid( struct drm_t *drm, uint32_t fbid );
 void drm_unlock_fbid( struct drm_t *drm, uint32_t fbid );
 void drm_drop_fbid( struct drm_t *drm, uint32_t fbid );
 bool drm_set_connector( struct drm_t *drm, gamescope::CDRMConnector *conn );
+void drm_set_orientation( struct drm_t *drm, bool isRotated );
 bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode );
 bool drm_set_refresh( struct drm_t *drm, int refresh );
 bool drm_set_resolution( struct drm_t *drm, int width, int height );

@@ -1599,32 +1599,32 @@ static uint64_t determine_drm_orientation(struct drm_t *drm, gamescope::CDRMConn
 }
 
 /* Handle the orientation of the display */
-static void update_drm_effective_orientation(struct drm_t *drm, gamescope::CDRMConnector *pConnector, const drmModeModeInfo *mode)
+static void update_drm_effective_orientation(struct drm_t *drm, gamescope::CDRMConnector *pConnector, const drmModeModeInfo *mode, bool fakedExternal)
 {
 	gamescope::GamescopeScreenType eScreenType = pConnector->GetScreenType();
 
-	if ( eScreenType == gamescope::GAMESCOPE_SCREEN_TYPE_INTERNAL )
+    if ( (eScreenType == gamescope::GAMESCOPE_SCREEN_TYPE_INTERNAL) || (eScreenType == gamescope::GAMESCOPE_SCREEN_TYPE_EXTERNAL && fakedExternal))
 	{
-		drm_log.infof("Rotating internal display orientation");
-		switch ( g_drmModeOrientation )
-		{
-			case PANEL_ORIENTATION_0:
-				g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_0;
-				break;
-			case PANEL_ORIENTATION_90:
-				g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_90;
-				break;
-			case PANEL_ORIENTATION_180:
-				g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_180;
-				break;
-			case PANEL_ORIENTATION_270:
-				g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_270;
-				break;
-			case PANEL_ORIENTATION_AUTO:
-				g_drmEffectiveOrientation[eScreenType] = determine_drm_orientation( drm, pConnector, mode );
-				break;
-		}
-	}
+		// We are rotating an internal display or an internal display that is faked as external
+        switch (g_drmModeOrientation)
+        {
+        case PANEL_ORIENTATION_0:
+            g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_0;
+            break;
+        case PANEL_ORIENTATION_90:
+            g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_90;
+            break;
+        case PANEL_ORIENTATION_180:
+            g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_180;
+            break;
+        case PANEL_ORIENTATION_270:
+            g_drmEffectiveOrientation[eScreenType] = DRM_MODE_ROTATE_270;
+            break;
+        case PANEL_ORIENTATION_AUTO:
+            g_drmEffectiveOrientation[eScreenType] = determine_drm_orientation(drm, pConnector, mode);
+            break;
+        }
+    }
     else if (eScreenType == gamescope::GAMESCOPE_SCREEN_TYPE_EXTERNAL)
     {
 		// We are rotating a real external dislay
@@ -1652,9 +1652,9 @@ static void update_drm_effective_orientation(struct drm_t *drm, gamescope::CDRMC
 	}
 }
 
-static void update_drm_effective_orientations( struct drm_t *drm, const drmModeModeInfo *pMode )
+static void update_drm_effective_orientations( struct drm_t *drm, const drmModeModeInfo *pMode, bool panel_flag )
 {
-	update_drm_effective_orientation( drm, drm->pConnector, pMode );
+	update_drm_effective_orientation( drm, drm->pConnector, pMode, panel_flag );
 }
 
 // Only used for NV12 buffers
@@ -2897,6 +2897,25 @@ static void drm_unset_mode( struct drm_t *drm )
 	g_bRotated = false;
 }
 
+void drm_set_orientation( struct drm_t *drm, bool isRotated)
+{
+	int width = g_nOutputWidth;
+	int height = g_nOutputHeight;
+	g_bRotated = isRotated;
+	if ( g_bRotated ) {
+		int tmp = width;
+		width = height;
+		height = tmp;
+	}
+
+	if (!drm->pConnector || !drm->pConnector->GetModeConnector())
+		return;
+
+	drmModeConnector *connector = drm->pConnector->GetModeConnector();
+	const drmModeModeInfo *mode = find_mode(connector, width, height, 0);
+	update_drm_effective_orientations(drm, mode, g_bPanelTypeFaked);
+}
+
 bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 {
 	if (!drm->pConnector || !drm->pConnector->GetModeConnector())
@@ -2915,7 +2934,7 @@ bool drm_set_mode( struct drm_t *drm, const drmModeModeInfo *mode )
 
 	g_nOutputRefresh = mode->vrefresh;
 
-	update_drm_effective_orientations(drm, mode);
+	update_drm_effective_orientations(drm, mode, g_bPanelTypeFaked);
 
 	switch ( g_drmEffectiveOrientation[screenType] )
 	{
