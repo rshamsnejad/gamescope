@@ -139,6 +139,9 @@ extern float g_flInternalDisplayBrightnessNits;
 extern float g_flHDRItmSdrNits;
 extern float g_flHDRItmTargetNits;
 
+// define env_to_bool to point to the function in drm: remove in later patches pl0x
+extern bool env_to_bool(const char *env);
+
 uint64_t g_lastWinSeq = 0;
 
 static std::shared_ptr<gamescope::BackendBlob> s_scRGB709To2020Matrix;
@@ -5462,7 +5465,7 @@ handle_property_notify(xwayland_ctx_t *ctx, XPropertyEvent *ev)
 			int width = xwayland_mode_ctl[ 1 ];
 			int height = xwayland_mode_ctl[ 2 ];
 
-			if ( g_nOutputWidth != 1280 && width == 1280 )
+			if ( g_nOutputWidth != 1280 && width == 1280 && !env_to_bool( getenv("GAMESCOPE_ENABLE_720P_RESTRICT") ) )
 			{
 				width = g_nOutputWidth;
 				height = g_nOutputHeight;
