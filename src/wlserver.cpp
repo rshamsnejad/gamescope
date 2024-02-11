@@ -71,6 +71,7 @@
 static LogScope wl_log("wlserver");
 
 //#define GAMESCOPE_SWAPCHAIN_DEBUG
+extern bool env_to_bool(const char *env);
 
 struct wlserver_t wlserver = {
 	.touch_down_ids = {}
@@ -2429,7 +2430,7 @@ void wlserver_touchmotion( double x, double y, int touch_id, uint32_t time )
 		{
 			wlr_seat_touch_notify_motion( wlserver.wlr.seat, time, touch_id, tx, ty );
 
-			if(!getenv("GAMESCOPE_DISABLE_TOUCH_GESTURES")) {
+			if (!env_to_bool(getenv("GAMESCOPE_DISABLE_TOUCH_GESTURES"))) {
 				bool start_gesture = false;
 
 				// Round the x-coordinate to the nearest whole number
