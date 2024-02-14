@@ -13,6 +13,9 @@
 #include <mutex>
 #include <condition_variable>
 
+extern int g_nPreferredOutputWidth;
+extern int g_nPreferredOutputHeight;
+
 static LogScope openvr_log("openvr");
 
 static bool GetVulkanInstanceExtensionsRequired( std::vector< std::string > &outInstanceExtensionList );
