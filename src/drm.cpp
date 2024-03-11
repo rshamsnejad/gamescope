@@ -551,6 +551,11 @@ static constexpr uint32_t s_kSteamDeckOLEDRates[] =
 	90, 
 };
 
+static constexpr uint32_t s_kLegionGoRates[] =
+{
+	60, 144
+};
+
 static void update_connector_display_info_wl(struct drm_t *drm)
 {
 	wlserver_lock();
@@ -2110,6 +2115,8 @@ namespace gamescope
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "ANX7530 U"sv ) ||
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "Jupiter"sv ) ||
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "Galileo"sv );
+		const bool bLegionGoDisplay =
+			( m_Mutable.szMakePNP == "LEN"sv && m_Mutable.szModel == "Go Display"sv );
 
 		if ( bSteamDeckDisplay )
 		{
@@ -2131,6 +2138,10 @@ namespace gamescope
 				m_Mutable.eKnownDisplay = GAMESCOPE_KNOWN_DISPLAY_STEAM_DECK_LCD;
 				m_Mutable.ValidDynamicRefreshRates = std::span( s_kSteamDeckLCDRates );
 			}
+		}
+		else if ( bLegionGoDisplay )
+		{
+			m_Mutable.ValidDynamicRefreshRates = std::span( s_kLegionGoRates );
 		}
 
 		// Colorimetry
