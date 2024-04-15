@@ -842,6 +842,8 @@ void drm_update_patched_edid( drm_t *drm )
 #define GALILEO_SDC_PID 0x3003
 #define GALILEO_BOE_PID 0x3004
 
+extern std::vector<uint32_t> g_customRefreshRates;
+
 static void parse_edid( drm_t *drm, struct connector *conn)
 {
 	memset(conn->make_pnp, 0, sizeof(conn->make_pnp));
@@ -917,7 +919,9 @@ static void parse_edid( drm_t *drm, struct connector *conn)
 		conn->valid_display_rates = std::span(galileo_display_rates);
 	} else {
 		conn->is_galileo_display = 0;
-		if ( conn->is_steam_deck_display ) {
+		if ( g_customRefreshRates.size() > 0 ) {
+			conn->valid_display_rates = std::span(g_customRefreshRates);
+		} else if ( conn->is_steam_deck_display ) {
 			conn->valid_display_rates = std::span(steam_deck_display_rates);
 		} else if ( strcmp(conn->make_pnp, "LEN") == 0 && strcmp(conn->model, "Go Display") == 0 ) {
 			conn->valid_display_rates = std::span(legion_go_display_rates);
