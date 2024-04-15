@@ -919,7 +919,10 @@ static void parse_edid( drm_t *drm, struct connector *conn)
 		conn->valid_display_rates = std::span(galileo_display_rates);
 	} else {
 		conn->is_galileo_display = 0;
-		if ( g_customRefreshRates.size() > 0 ) {
+		if ( g_customRefreshRates.size() > 0 && 
+			(conn->connector->connector_type == DRM_MODE_CONNECTOR_eDP ||
+					conn->connector->connector_type == DRM_MODE_CONNECTOR_LVDS ||
+					conn->connector->connector_type == DRM_MODE_CONNECTOR_DSI)) {
 			conn->valid_display_rates = std::span(g_customRefreshRates);
 		} else if ( conn->is_steam_deck_display ) {
 			conn->valid_display_rates = std::span(steam_deck_display_rates);

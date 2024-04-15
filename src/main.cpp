@@ -683,7 +683,7 @@ int main(int argc, char **argv)
 					g_drmModeExternalOrientation = force_external_orientation( optarg );
 				} else if (strcmp(opt_name, "force-panel-type") == 0) {
 					g_drmPanelType = force_panel_type( optarg );
-				else if (strcmp(opt_name, "custom-refresh-rates") == 0) {
+				} else if (strcmp(opt_name, "custom-refresh-rates") == 0) {
 					g_customRefreshRates = parse_custom_refresh_rates( optarg );
 				} else if (strcmp(opt_name, "sharpness") == 0 ||
 						   strcmp(opt_name, "fsr-sharpness") == 0) {
