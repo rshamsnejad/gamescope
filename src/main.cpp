@@ -572,7 +572,6 @@ static bool CheckWaylandPresentationTime()
 }
 
 std::vector<uint32_t> g_customRefreshRates;
-// eg: 60,60,90,110-120
 static std::vector<uint32_t> parse_custom_refresh_rates( const char *str )
 {
 	std::vector<uint32_t> rates;
