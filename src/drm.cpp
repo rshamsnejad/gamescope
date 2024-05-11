@@ -556,6 +556,13 @@ static constexpr uint32_t s_kLegionGoRates[] =
 	60, 144
 };
 
+static constexpr uint32_t s_kLokiRates[] =
+{
+	40,
+	50,
+	60,
+};
+
 static void update_connector_display_info_wl(struct drm_t *drm)
 {
 	wlserver_lock();
@@ -2117,6 +2124,8 @@ namespace gamescope
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "Galileo"sv );
 		const bool bLegionGoDisplay =
 			( m_Mutable.szMakePNP == "LEN"sv && m_Mutable.szModel == "Go Display"sv );
+		const bool bLokiDisplay =
+			( m_Mutable.szMakePNP == "AYN"sv && m_Mutable.szModel == "LK-GOLDSPV58"sv );
 
 		if ( bSteamDeckDisplay )
 		{
@@ -2142,6 +2151,10 @@ namespace gamescope
 		else if ( bLegionGoDisplay )
 		{
 			m_Mutable.ValidDynamicRefreshRates = std::span( s_kLegionGoRates );
+		}
+		else if ( bLokiDisplay )
+		{
+			m_Mutable.ValidDynamicRefreshRates = std::span( s_kLokiRates );
 		}
 
 		// Colorimetry
