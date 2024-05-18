@@ -99,7 +99,6 @@
       <arg name="path" type="string" summary="Path to written screenshot"></arg>
     </event>
 
-
     <enum name="display_rotation_flag" bitfield="true" since="2">
       <entry name="normal" value="1"/>
       <entry name="left" value="2"/>
