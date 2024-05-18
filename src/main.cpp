@@ -124,6 +124,8 @@ const struct option *gamescope_options = (struct option[]){
 	{ "fade-out-duration", required_argument, nullptr, 0 },
 	{ "force-orientation", required_argument, nullptr, 0 },
 	{ "force-windows-fullscreen", no_argument, nullptr, 0 },
+	{ "bypass-steam-resolution", no_argument, nullptr, 0 },
+
 
 	{ "disable-color-management", no_argument, nullptr, 0 },
 	{ "sdr-gamut-wideness", required_argument, nullptr, 0 },
@@ -170,6 +172,7 @@ const char usage[] =
 	"  -T, --stats-path               write statistics to path\n"
 	"  -C, --hide-cursor-delay        hide cursor image after delay\n"
 	"  -e, --steam                    enable Steam integration\n"
+	"  --bypass-steam-resolution      bypass Steam's default 720p/800p default resolution\n"
 	"  --touch-gestures               enable touch gestures for Steam menus\n"
 	"  --xwayland-count               create N xwayland servers\n"
 	"  --prefer-vk-device             prefer Vulkan device for compositing (ex: 1002:7300)\n"
