@@ -7186,7 +7186,7 @@ steamcompmgr_main(int argc, char **argv)
 					bForceWindowsFullscreen = true;
 				} else if (strcmp(opt_name, "hdr-enabled") == 0) {
 					cv_hdr_enabled = true;
-				} else if (strcmp(opt_name, "bypass_steam_resolution") == 0) {
+				} else if (strcmp(opt_name, "bypass-steam-resolution") == 0) {
 					cv_bypass_steam_resolution = true;
 				} else if (strcmp(opt_name, "hdr-debug-force-support") == 0) {
 					g_bForceHDRSupportDebug = true;
