@@ -1126,8 +1126,9 @@ static void gamescope_control_rotate_display( struct wl_client *client, struct w
 				wl_log.errorf("Invalid target orientation selected");
 		}
 	}
-	//drm_set_orientation(&g_DRM, isRotated);
-	//g_DRM.out_of_date = 2;
+	drm_set_orientation(&g_DRM, isRotated);
+	GetBackend()->DirtyState( true, true );
+
 }
 
 static void gamescope_control_handle_destroy( struct wl_client *client, struct wl_resource *resource )
