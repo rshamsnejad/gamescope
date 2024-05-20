@@ -56,6 +56,7 @@ static constexpr bool k_bUseCursorPlane = false;
 
 extern int g_nPreferredOutputWidth;
 extern int g_nPreferredOutputHeight;
+bool panelTypeChanged = false;
 
 gamescope::ConVar<bool> cv_drm_single_plane_optimizations( "drm_single_plane_optimizations", true, "Whether or not to enable optimizations for single plane usage." );
 gamescope::ConVar<bool> cv_drm_debug_disable_shaper_and_3dlut( "drm_debug_disable_shaper_and_3dlut", false, "Shaper + 3DLUT chicken bit. (Force disable/DEFAULT, no logic change)" );
@@ -310,6 +311,7 @@ namespace gamescope
 			{
 				if ( g_bExternalForced )
 				{
+					panelTypeChanged = true;
 					return g_ForcedScreenType;
 				}
 				else
@@ -318,7 +320,7 @@ namespace gamescope
 				}
 			}
 
-
+			panelTypeChanged = false;
 			return GAMESCOPE_SCREEN_TYPE_EXTERNAL;
 		}
 
@@ -2016,7 +2018,19 @@ namespace gamescope
 
 	void CDRMConnector::UpdateEffectiveOrientation( const drmModeModeInfo *pMode )
 	{
-		if ( this->GetScreenType() == GAMESCOPE_SCREEN_TYPE_INTERNAL && g_DesiredInternalOrientation != GAMESCOPE_PANEL_ORIENTATION_AUTO ) {
+
+		if ( this->GetScreenType() == GAMESCOPE_SCREEN_TYPE_EXTERNAL && panelTypeChanged )
+			drm_log.infof("Display is internal faked as external");
+		if ( this->GetScreenType() == GAMESCOPE_SCREEN_TYPE_INTERNAL && !panelTypeChanged )
+			drm_log.infof("Display is real internal");
+		if (panelTypeChanged){
+			drm_log.infof("Panel type was changed");
+		}
+
+		if (( this->GetScreenType() == GAMESCOPE_SCREEN_TYPE_INTERNAL && g_DesiredInternalOrientation != GAMESCOPE_PANEL_ORIENTATION_AUTO ) ||
+			( this->GetScreenType() == GAMESCOPE_SCREEN_TYPE_EXTERNAL && g_DesiredInternalOrientation != GAMESCOPE_PANEL_ORIENTATION_AUTO
+			  && panelTypeChanged)) {
+
 			drm_log.infof("We are rotating the orientation of the internal or faked external display");
 			m_ChosenOrientation = g_DesiredInternalOrientation;
 		}
