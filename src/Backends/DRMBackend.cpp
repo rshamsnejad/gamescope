@@ -2162,9 +2162,9 @@ namespace gamescope
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "Jupiter"sv ) ||
 			( m_Mutable.szMakePNP == "VLV"sv && m_Mutable.szModel == "Galileo"sv );
 
-		if ( g_customRefreshRates.size() > 0 && GetScreenType() == GAMESCOPE_SCREEN_TYPE_INTERNAL ) {
-					m_Mutable.ValidDynamicRefreshRates = std::span(g_customRefreshRates);
-					return;
+		if ( g_customRefreshRates.size() > 0 && ( GetScreenType() == GAMESCOPE_SCREEN_TYPE_INTERNAL || g_bExternalForced ) ) {
+			m_Mutable.ValidDynamicRefreshRates = std::span(g_customRefreshRates);
+			return;
 		}
 		if ( bSteamDeckDisplay )
 		{
